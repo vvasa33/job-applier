@@ -1,0 +1,14 @@
+{
+  "userAuthenticated": false,
+  "jobPostingInfo": {
+    "id": "posting-200",
+    "title": "Data Intern",
+    "location": "United States of America",
+    "remoteType": "Remote",
+    "externalUrl": "https://example.wd5.myworkdayjobs.com/Careers/job/Remote/Data-Intern_R-200?source=CareerSite",
+    "jobReqId": "R-200",
+    "startDate": "2026-08-15",
+    "jobDescription": "<p>Remote data internship.</p>",
+    "country": {"descriptor": "United States of America"}
+  }
+}

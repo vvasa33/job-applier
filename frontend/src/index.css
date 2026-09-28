@@ -1,0 +1,52 @@
+@import "tailwindcss";
+@import "@fontsource/geist/400.css";
+@import "@fontsource/geist/500.css";
+@import "@fontsource/geist/600.css";
+@import "@fontsource/geist-mono/400.css";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  color-scheme: light;
+  --bg: #f3f4f2;
+  --fg: #1c211d;
+  --muted: #3e463f;
+  --line: #d5dbd4;
+  --panel: #fbfbfa;
+  --accent: #1b6b43;
+  --accent-fg: #f3faf6;
+  --shadow: 0 16px 40px rgb(28 33 29 / 0.06);
+}
+
+:root.dark {
+  color-scheme: dark;
+  --bg: #141614;
+  --fg: #eceee9;
+  --muted: #c5cdc6;
+  --line: #2c322e;
+  --panel: #1c1f1c;
+  --accent: #6fbf90;
+  --accent-fg: #07140d;
+  --shadow: 0 16px 40px rgb(0 0 0 / 0.28);
+}
+
+@theme {
+  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, monospace;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+  }
+}

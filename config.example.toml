@@ -1,0 +1,4 @@
+host = "127.0.0.1"
+port = 8765
+log_level = "INFO"
+# data_dir = "/home/you/.local/share/jobhunter"

@@ -1,0 +1,13 @@
+{
+  "total": 3,
+  "userAuthenticated": false,
+  "jobPostings": [
+    {
+      "title": "Campus Ambassador",
+      "externalPath": "/job/Austin-Texas/Campus-Ambassador_R-300",
+      "locationsText": "Austin, Texas, United States of America",
+      "postedOn": "Posted Yesterday",
+      "bulletFields": ["R-300", "Non-Exempt"]
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "jobs": [
+    {
+      "id": 100,
+      "title": "Software Engineering Intern",
+      "absolute_url": "https://example.com/jobs/search?gh_jid=100",
+      "requisition_id": "R-100",
+      "location": {"name": "McLean, VA"}
+    },
+    {
+      "id": 300,
+      "title": "Campus Ambassador Intern",
+      "absolute_url": "https://example.com/jobs/300",
+      "requisition_id": "R-300",
+      "location": {"name": "Austin, Texas"},
+      "updated_at": "2026-08-01T00:00:00Z"
+    },
+    {
+      "id": 400,
+      "title": "Hardware Co-op",
+      "absolute_url": "https://example.com/jobs/400"
+    },
+    {
+      "id": 500,
+      "title": "Account Executive",
+      "absolute_url": "https://example.com/jobs/500",
+      "location": {"name": "New York, NY"}
+    }
+  ],
+  "meta": {"total": 4}
+}

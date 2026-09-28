@@ -1,0 +1,11 @@
+{
+  "id": 200,
+  "title": "Data Intern",
+  "absolute_url": "https://boards.greenhouse.io/example/jobs/200?gh_src=abc",
+  "requisition_id": "See Opening ID",
+  "location": {"name": "Remote"},
+  "content": "<p>Work from the United States.</p>",
+  "offices": [
+    {"name": "US", "location": "United States"}
+  ]
+}

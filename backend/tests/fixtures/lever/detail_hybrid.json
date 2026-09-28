@@ -1,0 +1,15 @@
+{
+  "id": "posting-100",
+  "text": "Software Engineering Intern",
+  "categories": {
+    "commitment": "Intern",
+    "location": "McLean, VA",
+    "allLocations": ["McLean, VA", "Arlington, VA"]
+  },
+  "country": "US",
+  "workplaceType": "hybrid",
+  "description": "<p>Build software in McLean.</p>",
+  "hostedUrl": "https://jobs.lever.co/example/posting-100",
+  "applyUrl": "https://jobs.lever.co/example/posting-100/apply?lever-source=jobhunter",
+  "createdAt": 1756684800000
+}

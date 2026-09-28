@@ -1,0 +1,70 @@
+[
+  {
+    "id": "posting-100",
+    "text": "Software Engineering Intern",
+    "categories": {
+      "commitment": "Intern",
+      "location": "McLean, VA",
+      "allLocations": ["McLean, VA", "Arlington, VA"]
+    },
+    "country": "US",
+    "workplaceType": "hybrid",
+    "description": "<p>Build software in McLean.</p>",
+    "hostedUrl": "https://jobs.lever.co/example/posting-100",
+    "applyUrl": "https://jobs.lever.co/example/posting-100/apply?lever-source=jobhunter",
+    "createdAt": 1756684800000
+  },
+  {
+    "id": "posting-bad",
+    "text": " ",
+    "applyUrl": "https://jobs.lever.co/example/posting-bad/apply"
+  },
+  {
+    "id": "posting-100",
+    "text": "Software Engineering Intern",
+    "categories": {"location": "McLean, VA", "commitment": "Intern"},
+    "workplaceType": "hybrid",
+    "applyUrl": "https://jobs.lever.co/example/posting-100/apply?lever-source=jobhunter"
+  },
+  {
+    "id": "posting-200",
+    "text": "Data Intern",
+    "categories": {"location": "3 Locations", "allLocations": []},
+    "country": "US",
+    "workplaceType": "remote",
+    "hostedUrl": "https://jobs.lever.co/example/posting-200",
+    "applyUrl": "https://jobs.lever.co/example/posting-200/apply"
+  },
+  {
+    "id": "posting-300",
+    "text": "Campus Ambassador Intern",
+    "categories": {"location": "Austin, Texas", "commitment": "Internship"},
+    "country": "US",
+    "workplaceType": "on-site",
+    "applyUrl": "https://jobs.lever.co/example/posting-300/apply",
+    "createdAt": 1754006400000
+  },
+  {
+    "text": "Missing Id Intern",
+    "applyUrl": "https://jobs.lever.co/example/missing/apply"
+  },
+  {
+    "id": "posting-260",
+    "text": "Broken Url Intern",
+    "applyUrl": "not-a-url",
+    "hostedUrl": "also-not-a-url"
+  },
+  null,
+  {
+    "id": "posting-400",
+    "text": "Hardware Co-op",
+    "applyUrl": "https://jobs.lever.co/example/posting-400/apply"
+  },
+  {
+    "id": "posting-500",
+    "text": "Account Executive",
+    "categories": {"commitment": "Full-time", "location": "New York, NY"},
+    "workplaceType": "on-site",
+    "applyUrl": "https://jobs.lever.co/example/posting-500/apply"
+  }
+]

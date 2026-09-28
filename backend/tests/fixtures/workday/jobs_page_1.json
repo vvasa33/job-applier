@@ -1,0 +1,22 @@
+{
+  "total": 3,
+  "userAuthenticated": false,
+  "jobPostings": [
+    {
+      "title": "Software Engineering Intern",
+      "externalPath": "/job/McLean-Virginia/Software-Engineering-Intern_R-100",
+      "locationsText": "McLean, Virginia, United States of America",
+      "postedOn": "Posted Today",
+      "remoteType": "Hybrid",
+      "bulletFields": ["R-100"]
+    },
+    {
+      "title": "Data Intern",
+      "externalPath": "/job/Remote/Data-Intern_R-200",
+      "locationsText": "3 Locations",
+      "postedOn": "Posted 2 Days Ago",
+      "remoteType": "Remote",
+      "bulletFields": ["R-200"]
+    }
+  ]
+}

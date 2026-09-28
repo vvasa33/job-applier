@@ -1,0 +1,19 @@
+{
+  "userAuthenticated": false,
+  "hiringOrganization": {"name": "Example"},
+  "jobPostingInfo": {
+    "id": "posting-100",
+    "title": "Software Engineering Intern",
+    "location": "McLean, Virginia, United States of America",
+    "additionalLocations": ["Arlington, VA"],
+    "remoteType": "Hybrid",
+    "externalUrl": "https://example.wd5.myworkdayjobs.com/Careers/job/McLean-Virginia/Software-Engineering-Intern_R-100",
+    "jobReqId": "R-100",
+    "startDate": "2026-09-01",
+    "postedOn": "Posted Today",
+    "canApply": true,
+    "posted": true,
+    "jobDescription": "<p>Summer 2027 software internship in McLean.</p>",
+    "country": {"descriptor": "United States of America"}
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "userAuthenticated": false,
+  "jobPostingInfo": {
+    "id": "posting-300",
+    "title": "Campus Ambassador",
+    "location": "Austin, Texas, United States of America",
+    "remoteType": "On-site",
+    "externalUrl": "https://example.wd5.myworkdayjobs.com/Careers/job/Austin-Texas/Campus-Ambassador_R-300",
+    "jobReqId": "R-300",
+    "jobDescription": "<p>On-site campus role.</p>",
+    "country": {"descriptor": "United States of America"}
+  }
+}

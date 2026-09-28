@@ -1,0 +1,13 @@
+{
+  "id": 100,
+  "title": "Software Engineering Intern",
+  "absolute_url": "https://example.com/jobs/search?gh_jid=100",
+  "requisition_id": "R-100",
+  "location": {"name": "Hybrid"},
+  "content": "&lt;p&gt;Build software in McLean.&lt;/p&gt;",
+  "first_published": "2026-09-01T15:00:00Z",
+  "offices": [
+    {"name": "McLean", "location": "McLean, VA"},
+    {"name": "Arlington", "location": "Arlington, VA"}
+  ]
+}
