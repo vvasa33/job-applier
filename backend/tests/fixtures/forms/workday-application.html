@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>My Information</title>
+</head>
+<body>
+  <div data-automation-id="applyFlowPage">
+    <h2 data-automation-id="pageHeaderTitle">My Information</h2>
+    <p id="result" data-notice>not submitted</p>
+    <form id="apply-form" action="/submit" method="post">
+      <div data-automation-id="formField-legalName--firstName">
+        <label for="first-name">First Name<span aria-hidden="true">*</span></label>
+        <input id="first-name" data-automation-id="legalName--firstName" aria-required="true" type="text" value="Ada">
+      </div>
+
+      <div data-automation-id="formField-email">
+        <label for="email">Email</label>
+        <input id="email" data-automation-id="email" type="email">
+      </div>
+
+      <div data-automation-id="formField-country">
+        <label id="label-country">Country<span>*</span></label>
+        <button id="country" type="button" data-automation-id="country" aria-haspopup="listbox" aria-labelledby="label-country" aria-required="true">Select One</button>
+        <ul role="listbox">
+          <li id="country-us" role="option">United States</li>
+          <li id="country-ca" role="option">Canada</li>
+        </ul>
+      </div>
+
+      <div data-automation-id="formField-degree">
+        <label for="degree">Degree</label>
+        <select id="degree" data-automation-id="degree">
+          <option value="">Select One</option>
+          <option value="Bachelors">Bachelors</option>
+          <option value="Masters" selected>Masters</option>
+        </select>
+      </div>
+
+      <div data-automation-id="formField-workAuthorization">
+        <label id="label-auth">Are you authorized to work in the United States?<span>*</span></label>
+        <div id="auth" role="radiogroup" data-automation-id="workAuthorization" aria-labelledby="label-auth" aria-required="true">
+          <input type="radio" name="auth" id="auth-yes" value="Yes">
+          <label for="auth-yes">Yes</label>
+          <input type="radio" name="auth" id="auth-no" value="No" checked>
+          <label for="auth-no">No</label>
+        </div>
+      </div>
+
+      <div data-automation-id="formField-previouslyEmployed">
+        <input id="previously-employed" data-automation-id="previouslyEmployed" type="checkbox">
+        <label for="previously-employed">I have previously worked here</label>
+      </div>
+
+      <div data-automation-id="formField-resume">
+        <label for="resume-file">Resume/CV</label>
+        <input id="resume-file" data-automation-id="file-upload-input-ref" type="file">
+      </div>
+
+      <div data-automation-id="formField-question-123">
+        <label for="why">Why do you want this internship?</label>
+        <textarea id="why" data-automation-id="question-123" aria-required="true"></textarea>
+      </div>
+
+      <div data-automation-id="formField-hear">
+        <label for="hear">How did you hear about us?</label>
+        <input id="hear" data-automation-id="hear" type="text">
+      </div>
+
+      <div data-automation-id="formField-mystery">
+        <input id="mystery" data-automation-id="mystery" type="text">
+      </div>
+
+      <button id="back" type="button" data-automation-id="pageFooterBackButton">Back</button>
+      <button id="next" type="button" data-automation-id="pageFooterNextButton">Save and Continue</button>
+      <button id="submit" type="submit" data-automation-id="pageFooterSubmitButton">Submit</button>
+    </form>
+  </div>
+  <script>
+    document.querySelectorAll("[role='option']").forEach((option) => {
+      option.addEventListener("click", () => {
+        const field = option.closest("[data-automation-id^='formField-']");
+        field.querySelector("button").textContent = option.textContent.trim();
+      });
+    });
+    document.getElementById("next").addEventListener("click", () => {
+      document.getElementById("result").textContent = "next";
+    });
+    document.getElementById("apply-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      document.getElementById("result").textContent = "submitted";
+    });
+  </script>
+</body>
+</html>

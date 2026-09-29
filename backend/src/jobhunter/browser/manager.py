@@ -51,6 +51,32 @@ _STRUCTURE = """() => {
   };
 }"""
 
+_FORM_HTML = """() => {
+  const sync = (el) => {
+    const type = (el.getAttribute("type") || "").toLowerCase();
+    if (type === "checkbox" || type === "radio") {
+      if (el.checked) el.setAttribute("checked", "checked");
+      else el.removeAttribute("checked");
+      return;
+    }
+    if (el.tagName === "SELECT") {
+      for (const option of el.options) {
+        if (option.selected) option.setAttribute("selected", "selected");
+        else option.removeAttribute("selected");
+      }
+      return;
+    }
+    if (type === "file") return;
+    if (el.tagName === "TEXTAREA") {
+      el.textContent = el.value;
+      return;
+    }
+    el.setAttribute("value", el.value);
+  };
+  document.querySelectorAll("input, textarea, select").forEach(sync);
+  return document.documentElement.outerHTML;
+}"""
+
 _SUBMITS = """(el) => {
   const type = (el.getAttribute("type") || "").toLowerCase();
   if (el.tagName === "INPUT" && (type === "submit" || type === "image")) return true;
@@ -270,6 +296,20 @@ class BrowserManager:
             )
 
         return self._guard("read", "", "page structure", operation)
+
+    @property
+    def location(self) -> str:
+        self._require_page()
+        return self._page.url
+
+    def form_html(self) -> str:
+        """Serialize the live page, including the current values of form controls."""
+
+        def operation() -> str:
+            self._require_page()
+            return self._page.evaluate(_FORM_HTML)
+
+        return self._guard("read", "", "form html", operation)
 
     def _refuse_submit(self, selector: str) -> None:
         self._require_page()

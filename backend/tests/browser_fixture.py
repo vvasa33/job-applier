@@ -28,10 +28,14 @@ class FormServer:
         handler = partial(_Handler, directory=str(root))
         self._httpd = ThreadingHTTPServer(("127.0.0.1", 0), handler)
         port = self._httpd.server_address[1]
-        self.demo = f"http://127.0.0.1:{port}/demo.html"
-        self.elsewhere = f"http://127.0.0.1:{port}/elsewhere.html"
-        self.hang = f"http://127.0.0.1:{port}/hang"
+        self.base = f"http://127.0.0.1:{port}"
+        self.demo = f"{self.base}/demo.html"
+        self.elsewhere = f"{self.base}/elsewhere.html"
+        self.hang = f"{self.base}/hang"
         self._thread = threading.Thread(target=self._httpd.serve_forever, daemon=True)
+
+    def page(self, name: str) -> str:
+        return f"{self.base}/{name}"
 
     def start(self) -> None:
         self._thread.start()
