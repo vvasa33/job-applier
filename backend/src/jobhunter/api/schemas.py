@@ -1,7 +1,9 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from jobhunter.domain.enums import ApplicationStatus
 
 
 class HealthResponse(BaseModel):
@@ -90,6 +92,50 @@ class ApplicationResumeResponse(BaseModel):
     pdf_path: str
     sha256: str
     version_id: int
+
+
+class ResumeVersionOut(BaseModel):
+    id: int
+    sha256: str
+    tex_path: str | None
+    pdf_path: str | None
+    diff_path: str | None
+    created_at: datetime
+
+
+class ApplicationEventOut(BaseModel):
+    id: int
+    actor: str
+    event_type: str
+    from_status: str | None
+    to_status: str | None
+    reason: str | None
+    resume_version_id: int | None
+    created_at: datetime
+
+
+class ApplicationResponse(BaseModel):
+    id: int
+    job_id: int
+    status: str
+    allowed_transitions: list[str]
+    opened_at: datetime
+    status_changed_at: datetime
+    started_at: datetime | None
+    submitted_at: datetime | None
+    resume_version: ResumeVersionOut | None
+    resume_versions: list[ResumeVersionOut]
+    history: list[ApplicationEventOut]
+
+
+class OpenApplicationRequest(BaseModel):
+    reason: str = "Application opened."
+
+
+class TransitionRequest(BaseModel):
+    to: ApplicationStatus
+    reason: str = Field(min_length=1, max_length=500)
+    resume_version_id: int | None = None
 
 
 class DashboardResponse(BaseModel):

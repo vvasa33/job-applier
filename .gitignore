@@ -7,6 +7,8 @@ __pycache__/
 *.egg-info/
 
 .env
+.env.*
+!.env.example
 data/
 *.db
 *.db-wal

@@ -89,17 +89,34 @@ def create_application(
     job: Job,
     *,
     autonomy_level: AutonomyLevel = AutonomyLevel.assist,
+    actor: EventActor = EventActor.system,
+    reason: str = "Application opened.",
 ) -> Application:
     existing_id = session.scalar(select(Application.id).where(Application.job_id == job.id))
     if existing_id is not None:
         raise DuplicateApplication(f"job {job.id} already has application {existing_id}")
+    opened_at = utcnow()
     application = Application(
         job_id=job.id,
-        status=ApplicationStatus.queued,
+        status=ApplicationStatus.found,
         autonomy_level=autonomy_level,
+        queued_at=opened_at,
+        status_changed_at=opened_at,
     )
     session.add(application)
     session.flush()
+    record_application_event(
+        session,
+        application,
+        event_type="application_created",
+        actor=actor,
+        data={
+            "from_status": None,
+            "to_status": ApplicationStatus.found.value,
+            "reason": reason,
+            "resume_version_id": None,
+        },
+    )
     return application
 
 

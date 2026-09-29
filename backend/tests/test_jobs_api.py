@@ -84,7 +84,7 @@ def test_job_list_filters_real_rows(settings) -> None:
     assert hybrid.json()["jobs"][0]["sources"] == ["greenhouse"]
 
     remote = client.get("/api/jobs", params={"workplace": "remote"})
-    assert remote.json()["jobs"][0]["application_status"] == ApplicationStatus.queued.value
+    assert remote.json()["jobs"][0]["application_status"] == ApplicationStatus.found.value
 
     saved = client.get("/api/jobs", params={"status": JobStatus.shortlisted.value})
     assert [job["title"] for job in saved.json()["jobs"]] == ["Software Engineering Intern"]

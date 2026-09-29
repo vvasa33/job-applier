@@ -36,16 +36,25 @@ export const JOB_STATUSES = [
 
 export const APPLICATION_STATUSES = [
   "none",
-  "queued",
-  "preparing",
-  "ready",
-  "in_progress",
-  "waiting_for_human",
-  "parked",
-  "awaiting_submit_confirmation",
-  "submitting",
+  "found",
+  "matched",
+  "saved",
+  "tailoring",
+  "ready_to_apply",
+  "applying",
+  "waiting_for_user",
   "submitted",
-  "needs_verification",
-  "failed",
-  "abandoned",
+  "rejected",
+  "interview",
+  "offer",
+  "withdrawn",
 ] as const;
+
+const DATE_TIME = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
+
+export function formatDateTime(value: string | null): string {
+  if (!value) return "Not recorded";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "Not recorded";
+  return DATE_TIME.format(parsed);
+}

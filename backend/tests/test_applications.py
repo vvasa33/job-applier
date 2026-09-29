@@ -34,7 +34,7 @@ def test_create_application(db_session) -> None:
     stored = db_session.get(Application, application.id)
     assert stored is not None
     assert stored.job_id == job.id
-    assert stored.status == ApplicationStatus.queued
+    assert stored.status == ApplicationStatus.found
     assert job.application.id == application.id
 
 
@@ -85,8 +85,9 @@ def test_application_events_are_append_only(db_session) -> None:
         .where(ApplicationEvent.application_id == application.id)
         .order_by(ApplicationEvent.id)
     ).all()
-    assert [event.id for event in history] == [first.id, second.id]
-    assert history[0].data == {"status": "queued"}
+    assert [event.id for event in history] == [history[0].id, first.id, second.id]
+    assert history[0].event_type == "application_created"
+    assert history[1].data == {"status": "queued"}
     assert "updated_at" not in ApplicationEvent.__table__.columns
 
     try:

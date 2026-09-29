@@ -6,6 +6,8 @@ from pathlib import Path
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict, TomlConfigSettingsSource
 
+from jobhunter.local_env import load_local_env
+
 _LOCAL_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 _LOG_LEVELS = frozenset({"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"})
 
@@ -72,6 +74,7 @@ class Settings(BaseSettings):
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
+    load_local_env()
     return Settings()
 
 

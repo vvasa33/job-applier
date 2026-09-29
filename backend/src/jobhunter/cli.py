@@ -9,8 +9,11 @@ from pathlib import Path
 from jobhunter.config import get_settings
 from jobhunter.db.migrate import init_database
 from jobhunter.db.session import build_engine, session_factory
+from jobhunter.llm.client import client_from_environment
+from jobhunter.llm.errors import LLMError
 from jobhunter.resume.application import prepare_application_resume
 from jobhunter.resume.master import MasterResumeError, compile_master, validate_master
+from jobhunter.resume.tailoring import LLMTailoringPlanner, tailor_application_resume
 
 
 def _repo_root() -> Path:
@@ -145,6 +148,28 @@ def run_resume_prepare(application_id: int) -> None:
     print(f"sha256 {report.sha256}")
 
 
+def run_resume_tailor(application_id: int) -> None:
+    try:
+        planner = LLMTailoringPlanner(client_from_environment())
+    except LLMError as exc:
+        raise SystemExit(str(exc)) from exc
+    settings, engine, session = _resume_session()
+    try:
+        report = tailor_application_resume(session, settings, application_id, planner)
+    except MasterResumeError as exc:
+        raise SystemExit(str(exc)) from exc
+    finally:
+        session.close()
+        engine.dispose()
+    print(f"tex {report.tex_path}")
+    print(f"pdf {report.pdf_path}")
+    print(f"report {report.change_report_path}")
+    print(f"evidence {report.evidence_path}")
+    print(f"changes {report.applied_changes} rejected {report.rejected}")
+    if report.plan_error:
+        print(f"plan not applied: {report.plan_error}")
+
+
 def run_resume_compile() -> None:
     settings, engine, session = _resume_session()
     try:
@@ -169,6 +194,8 @@ def main() -> None:
     resume_sub.add_parser("compile", help="Compile the master resume with pdflatex")
     prepare = resume_sub.add_parser("prepare", help="Copy and compile a resume for one application")
     prepare.add_argument("application_id", type=int)
+    tailor = resume_sub.add_parser("tailor", help="Tailor a resume for one application with the LLM")
+    tailor.add_argument("application_id", type=int)
     args = parser.parse_args()
     if args.command == "api":
         run_api()
@@ -182,6 +209,8 @@ def main() -> None:
         run_resume_compile()
     elif args.command == "resume" and args.resume_command == "prepare":
         run_resume_prepare(args.application_id)
+    elif args.command == "resume" and args.resume_command == "tailor":
+        run_resume_tailor(args.application_id)
     else:
         parser.print_help()
 

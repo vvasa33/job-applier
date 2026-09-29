@@ -28,18 +28,18 @@ class CsRelevance(StrEnum):
 
 
 class ApplicationStatus(StrEnum):
-    queued = "queued"
-    preparing = "preparing"
-    ready = "ready"
-    in_progress = "in_progress"
-    waiting_for_human = "waiting_for_human"
-    parked = "parked"
-    awaiting_submit_confirmation = "awaiting_submit_confirmation"
-    submitting = "submitting"
+    found = "found"
+    matched = "matched"
+    saved = "saved"
+    tailoring = "tailoring"
+    ready_to_apply = "ready_to_apply"
+    applying = "applying"
+    waiting_for_user = "waiting_for_user"
     submitted = "submitted"
-    needs_verification = "needs_verification"
-    failed = "failed"
-    abandoned = "abandoned"
+    rejected = "rejected"
+    interview = "interview"
+    offer = "offer"
+    withdrawn = "withdrawn"
 
 
 class ApplicationOutcome(StrEnum):

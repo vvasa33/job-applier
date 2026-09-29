@@ -187,7 +187,7 @@ class Application(TimestampMixin, Base):
     job_id: Mapped[int] = mapped_column(ForeignKey("jobs.id", ondelete="RESTRICT"), nullable=False)
     status: Mapped[ApplicationStatus] = mapped_column(
         _enum(ApplicationStatus, length=40),
-        default=ApplicationStatus.queued,
+        default=ApplicationStatus.found,
         nullable=False,
     )
     autonomy_level: Mapped[AutonomyLevel] = mapped_column(
@@ -204,15 +204,26 @@ class Application(TimestampMixin, Base):
     attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     current_page: Mapped[int | None] = mapped_column(Integer, nullable=True)
     queued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    status_changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     submit_intent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     confirmation_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    resume_version_id: Mapped[int | None] = mapped_column(
+        ForeignKey("resume_versions.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
 
     job: Mapped[Job] = relationship(back_populates="application")
     events: Mapped[list[ApplicationEvent]] = relationship(back_populates="application")
     answers: Mapped[list[ApplicationAnswer]] = relationship(back_populates="application")
-    resume_versions: Mapped[list[ResumeVersion]] = relationship(back_populates="application")
+    resume_versions: Mapped[list[ResumeVersion]] = relationship(
+        back_populates="application",
+        foreign_keys="ResumeVersion.application_id",
+    )
+    resume_version: Mapped[ResumeVersion | None] = relationship(
+        foreign_keys=[resume_version_id],
+    )
 
 
 class ResumeVersion(Base):
@@ -245,7 +256,10 @@ class ResumeVersion(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
     resume: Mapped[Resume] = relationship(back_populates="versions")
-    application: Mapped[Application | None] = relationship(back_populates="resume_versions")
+    application: Mapped[Application | None] = relationship(
+        back_populates="resume_versions",
+        foreign_keys=[application_id],
+    )
 
 
 class ApplicationEvent(Base):

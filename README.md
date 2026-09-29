@@ -29,7 +29,7 @@ backend/.venv/bin/jobhunter api
 
 ## Configuration
 
-Environment variables use the `JOBHUNTER_` prefix. See `.env.example`.
+Copy `.env.example` to `.env` and put `JOBHUNTER_LLM_API_KEY` there. `.env` is gitignored. A variable already set in the environment overrides the file.
 
 An optional TOML file is read when `JOBHUNTER_CONFIG` points at it. See `config.example.toml`. Environment variables override the file.
 
