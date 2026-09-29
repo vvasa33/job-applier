@@ -5,6 +5,7 @@ import { EMPTY_FILTERS, type JobFilters } from "./api/jobs";
 import { Dashboard } from "./pages/Dashboard";
 import { JobDetail } from "./pages/JobDetail";
 import { Jobs } from "./pages/Jobs";
+import { ReviewQueue } from "./pages/ReviewQueue";
 
 function readDark(): boolean {
   return document.documentElement.classList.contains("dark");
@@ -72,6 +73,9 @@ export function App() {
           <button type="button" className={navClass(url.pathname.startsWith("/jobs"))} onClick={() => open("/jobs")}>
             Jobs
           </button>
+          <button type="button" className={navClass(url.pathname.startsWith("/review"))} onClick={() => open("/review")}>
+            Review
+          </button>
         </nav>
         <button
           type="button"
@@ -88,7 +92,8 @@ export function App() {
           <Jobs filters={filters} onChange={(next) => open(writeFilters(next))} onOpen={open} />
         ) : null}
         {jobId ? <JobDetail id={jobId} onOpen={open} /> : null}
-        {url.pathname !== "/" && url.pathname !== "/jobs" && !jobId ? (
+        {url.pathname === "/review" ? <ReviewQueue onOpen={open} /> : null}
+        {url.pathname !== "/" && url.pathname !== "/jobs" && url.pathname !== "/review" && !jobId ? (
           <p className="mt-10">
             That page does not exist.{" "}
             <button type="button" className="text-[var(--accent)]" onClick={() => open("/")}>

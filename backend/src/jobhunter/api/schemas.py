@@ -121,6 +121,9 @@ class PendingFieldOut(BaseModel):
     proposed_value: str | None = None
     reasoning: str
     required: bool = False
+    confidence: float = 0
+    type: str = ""
+    options: list[str] = Field(default_factory=list)
 
 
 class ApplicationResponse(BaseModel):
@@ -136,6 +139,24 @@ class ApplicationResponse(BaseModel):
     resume_versions: list[ResumeVersionOut]
     history: list[ApplicationEventOut]
     pending_fields: list[PendingFieldOut] = Field(default_factory=list)
+    company: str = ""
+    title: str = ""
+    page_url: str | None = None
+    page_title: str | None = None
+    has_screenshot: bool = False
+    waiting_reason: str | None = None
+
+
+class ReviewQueueItem(BaseModel):
+    application_id: int
+    job_id: int
+    company: str
+    title: str
+    waiting_since: datetime
+    question_count: int
+    question_label: str | None = None
+    waiting_reason: str | None = None
+    has_screenshot: bool = False
 
 
 class ApplicantFactIn(BaseModel):
@@ -153,6 +174,15 @@ class RunApplicationRequest(BaseModel):
 
 class ResumeApplicationRequest(BaseModel):
     answers: dict[str, str] = Field(min_length=1)
+    facts: list[ApplicantFactIn] = Field(default_factory=list)
+    resume_path: str | None = None
+    resume_text: str | None = None
+
+
+class ReviewRequest(BaseModel):
+    action: Literal["approve", "edit", "skip", "stop"]
+    field_id: str = ""
+    value: str | None = None
     facts: list[ApplicantFactIn] = Field(default_factory=list)
     resume_path: str | None = None
     resume_text: str | None = None

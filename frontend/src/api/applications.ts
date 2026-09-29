@@ -25,7 +25,24 @@ export type PendingField = {
   proposed_value: string | null;
   reasoning: string;
   required: boolean;
+  confidence: number;
+  type: string;
+  options: string[];
 };
+
+export type ReviewItem = {
+  application_id: number;
+  job_id: number;
+  company: string;
+  title: string;
+  waiting_since: string;
+  question_count: number;
+  question_label: string | null;
+  waiting_reason: string | null;
+  has_screenshot: boolean;
+};
+
+export type ReviewAction = "approve" | "edit" | "skip" | "stop";
 
 export type ApplicationDetail = {
   id: number;
@@ -40,6 +57,12 @@ export type ApplicationDetail = {
   resume_versions: ResumeVersion[];
   history: ApplicationEvent[];
   pending_fields: PendingField[];
+  company: string;
+  title: string;
+  page_url: string | null;
+  page_title: string | null;
+  has_screenshot: boolean;
+  waiting_reason: string | null;
 };
 
 export class ApplicationRequestError extends Error {
@@ -59,6 +82,26 @@ export function openApplication(jobId: number, reason: string): Promise<Applicat
   return request(`/api/jobs/${jobId}/application`, {
     method: "POST",
     body: JSON.stringify({ reason }),
+  });
+}
+
+export function fetchApplicationById(applicationId: number, signal?: AbortSignal): Promise<ApplicationDetail> {
+  return request(`/api/applications/${applicationId}`, { signal });
+}
+
+export function fetchReviewQueue(signal?: AbortSignal): Promise<ReviewItem[]> {
+  return requestList(`/api/review`, { signal });
+}
+
+export function reviewApplication(
+  applicationId: number,
+  action: ReviewAction,
+  fieldId: string,
+  value?: string,
+): Promise<ApplicationDetail> {
+  return request(`/api/applications/${applicationId}/review`, {
+    method: "POST",
+    body: JSON.stringify({ action, field_id: fieldId, value: value ?? null }),
   });
 }
 
@@ -90,11 +133,19 @@ async function request(
   init: RequestInit,
   missingIsNull = false,
 ): Promise<ApplicationDetail> {
+  return (await readJson(path, init, missingIsNull)) as ApplicationDetail;
+}
+
+async function requestList(path: string, init: RequestInit): Promise<ReviewItem[]> {
+  return (await readJson(path, init, false)) as ReviewItem[];
+}
+
+async function readJson(path: string, init: RequestInit, missingIsNull: boolean): Promise<unknown> {
   const response = await fetch(path, {
     ...init,
     headers: { Accept: "application/json", "Content-Type": "application/json" },
   });
-  if (response.status === 404 && missingIsNull) return null as unknown as ApplicationDetail;
+  if (response.status === 404 && missingIsNull) return null;
   if (!response.ok) {
     let detail = `HTTP ${response.status}`;
     try {
@@ -105,5 +156,5 @@ async function request(
     }
     throw new ApplicationRequestError(response.status, detail);
   }
-  return (await response.json()) as ApplicationDetail;
+  return response.json() as Promise<unknown>;
 }
