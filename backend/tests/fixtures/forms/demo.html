@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Job Hunter form demo</title>
+</head>
+<body>
+  <h1>Application form demo</h1>
+  <p id="result" data-notice>not submitted</p>
+  <p id="memory" data-notice>empty</p>
+  <form id="demo-form" action="/submit" method="post">
+    <label for="full-name">Full name</label>
+    <input id="full-name" name="full_name" type="text">
+
+    <label for="email">Email</label>
+    <input id="email" name="email" type="email">
+
+    <label for="notes">Notes</label>
+    <textarea id="notes" name="notes"></textarea>
+
+    <label for="term">Term</label>
+    <select id="term" name="term">
+      <option value="">Choose</option>
+      <option value="summer">Summer</option>
+      <option value="fall">Fall</option>
+    </select>
+
+    <label for="work-auth">Authorized to work in the US</label>
+    <input id="work-auth" name="work_auth" type="checkbox" value="yes">
+
+    <fieldset>
+      <legend>Workplace</legend>
+      <label for="workplace-remote">Remote</label>
+      <input id="workplace-remote" name="workplace" type="radio" value="remote">
+      <label for="workplace-onsite">On-site</label>
+      <input id="workplace-onsite" name="workplace" type="radio" value="onsite">
+    </fieldset>
+
+    <label for="resume">Resume</label>
+    <input id="resume" name="resume" type="file">
+
+    <button type="button" id="draft">Save draft</button>
+    <button type="button" id="remember">Remember this browser</button>
+    <button type="submit" id="submit">Submit application</button>
+    <a id="leave" href="/elsewhere.html">Leave this page</a>
+  </form>
+  <script>
+    const result = document.getElementById("result");
+    const memory = document.getElementById("memory");
+    memory.textContent = localStorage.getItem("jobhunter-profile") || "empty";
+    document.getElementById("demo-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      result.textContent = "submitted";
+    });
+    document.getElementById("draft").addEventListener("click", () => {
+      result.textContent = "draft saved";
+    });
+    document.getElementById("remember").addEventListener("click", () => {
+      localStorage.setItem("jobhunter-profile", "kept");
+      memory.textContent = "kept";
+    });
+  </script>
+</body>
+</html>

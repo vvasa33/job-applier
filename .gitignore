@@ -10,6 +10,7 @@ __pycache__/
 .env.*
 !.env.example
 data/
+browser-profile/
 *.db
 *.db-wal
 *.db-shm
