@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from jobhunter import __version__
+from jobhunter.api.routers.agent import router as agent_router
 from jobhunter.api.routers.applications import router as applications_router
 from jobhunter.api.routers.health import router as health_router
 from jobhunter.api.routers.jobs import router as jobs_router
@@ -33,6 +34,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(jobs_router)
     app.include_router(applications_router)
     app.include_router(resume_router)
+    app.include_router(agent_router)
 
     @app.middleware("http")
     async def log_request(request, call_next):

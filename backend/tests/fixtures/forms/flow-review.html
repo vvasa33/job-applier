@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Review</title>
+</head>
+<body>
+  <div data-automation-id="applyFlowPage">
+    <h2 data-automation-id="pageHeaderTitle">Review</h2>
+    <p id="result" data-notice>Check your answers, then submit.</p>
+    <form id="apply-form" action="/never" method="post">
+      <button id="back" type="button" data-automation-id="pageFooterBackButton">Back</button>
+      <button id="submit" type="submit" data-automation-id="pageFooterSubmitButton">Submit</button>
+    </form>
+  </div>
+  <script>
+    document.getElementById("apply-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      document.body.innerHTML = "<h2>Thank you for applying</h2><p>Your application was submitted. This is a local test page.</p>";
+    });
+  </script>
+</body>
+</html>

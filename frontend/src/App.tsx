@@ -2,6 +2,7 @@ import { Moon, Sun } from "@phosphor-icons/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { EMPTY_FILTERS, type JobFilters } from "./api/jobs";
+import { Agent } from "./pages/Agent";
 import { Dashboard } from "./pages/Dashboard";
 import { JobDetail } from "./pages/JobDetail";
 import { Jobs } from "./pages/Jobs";
@@ -76,6 +77,9 @@ export function App() {
           <button type="button" className={navClass(url.pathname.startsWith("/review"))} onClick={() => open("/review")}>
             Review
           </button>
+          <button type="button" className={navClass(url.pathname === "/agent")} onClick={() => open("/agent")}>
+            Agent
+          </button>
         </nav>
         <button
           type="button"
@@ -93,7 +97,8 @@ export function App() {
         ) : null}
         {jobId ? <JobDetail id={jobId} onOpen={open} /> : null}
         {url.pathname === "/review" ? <ReviewQueue onOpen={open} /> : null}
-        {url.pathname !== "/" && url.pathname !== "/jobs" && url.pathname !== "/review" && !jobId ? (
+        {url.pathname === "/agent" ? <Agent onOpen={open} /> : null}
+        {!KNOWN_PATHS.has(url.pathname) && !jobId ? (
           <p className="mt-10">
             That page does not exist.{" "}
             <button type="button" className="text-[var(--accent)]" onClick={() => open("/")}>
@@ -105,6 +110,8 @@ export function App() {
     </div>
   );
 }
+
+const KNOWN_PATHS = new Set(["/", "/jobs", "/review", "/agent"]);
 
 function navClass(active: boolean): string {
   return active ? "text-[var(--fg)]" : "text-[var(--muted)]";

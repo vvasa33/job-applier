@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
 import type { ApplicationDetail, ReviewAction } from "../api/applications";
 
@@ -108,16 +108,99 @@ export function Intervention({
               <StopButton busy={busy} confirm={confirmStop} onConfirm={setConfirmStop} onStop={() => onReview("stop", "")} />
             </div>
           )}
-          <p className="text-sm text-[var(--muted)]">Saving an answer continues this application. It is not submitted.</p>
+          <p className="text-sm text-[var(--muted)]">
+            Answering continues this application once every question is resolved. Submitting is a separate step.
+          </p>
         </section>
       ) : (
-        <section className="grid gap-3">
-          <h3 className="text-xl font-medium">The page needs a look</h3>
-          <p>{application.waiting_reason || "The application paused before a question could be read."}</p>
-          <StopButton busy={busy} confirm={confirmStop} onConfirm={setConfirmStop} onStop={() => onReview("stop", "")} />
-        </section>
+        <Pause
+          application={application}
+          busy={busy}
+          stop={
+            <StopButton busy={busy} confirm={confirmStop} onConfirm={setConfirmStop} onStop={() => onReview("stop", "")} />
+          }
+          onReview={onReview}
+        />
       )}
     </article>
+  );
+}
+
+function Pause({
+  application,
+  busy,
+  stop,
+  onReview,
+}: {
+  application: ApplicationDetail;
+  busy: boolean;
+  stop: ReactNode;
+  onReview: (action: ReviewAction, fieldId: string, value?: string) => void;
+}) {
+  const reason = application.waiting_reason || "The application paused before a question could be read.";
+  if (application.resume_queued) {
+    return (
+      <section className="grid gap-3">
+        <h3 className="text-xl font-medium">Continuing</h3>
+        <p>
+          {application.agent_owns_browser
+            ? "Your decision is saved. The agent will pick this application up in its browser shortly."
+            : "Your decision is saved. Start the agent to continue this application."}
+        </p>
+        <div className="flex flex-wrap gap-2">{stop}</div>
+      </section>
+    );
+  }
+  if (application.pause_kind === "confirm_submit") {
+    return (
+      <section className="grid gap-3">
+        <h3 className="text-xl font-medium">Ready to submit</h3>
+        <p>{reason}</p>
+        <p className="text-sm text-[var(--muted)]">
+          The review page is shown above. Submitting presses the site&apos;s Submit button once. It is never retried. If an
+          answer changes after you confirm, you are asked again.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className={primaryClass} disabled={busy} onClick={() => onReview("confirm_submit", "")}>
+            Submit application
+          </button>
+          {stop}
+        </div>
+      </section>
+    );
+  }
+  if (application.pause_kind === "verify_submit") {
+    return (
+      <section className="grid gap-3">
+        <h3 className="text-xl font-medium">Did it go through?</h3>
+        <p>{reason}</p>
+        <p className="text-sm text-[var(--muted)]">
+          Check the site or your email for a confirmation. The agent will not press Submit again for this application.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className={primaryClass} disabled={busy} onClick={() => onReview("confirm_submitted", "")}>
+            It went through
+          </button>
+          {stop}
+        </div>
+      </section>
+    );
+  }
+  return (
+    <section className="grid gap-3">
+      <h3 className="text-xl font-medium">The page needs a look</h3>
+      <p>{reason}</p>
+      <p className="text-sm text-[var(--muted)]">
+        Fix anything on the page in the browser window if needed, then continue. The application restarts from its first
+        page and reuses every saved answer.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" className={primaryClass} disabled={busy} onClick={() => onReview("continue", "")}>
+          Continue
+        </button>
+        {stop}
+      </div>
+    </section>
   );
 }
 

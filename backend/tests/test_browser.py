@@ -53,7 +53,8 @@ def test_chromium_is_visible_and_the_profile_is_private(browser) -> None:
     assert commands
     assert all("--headless" not in command for command in commands)
     assert browser.profile_dir.stat().st_mode & 0o777 == 0o700
-    assert not hasattr(BrowserManager, "submit")
+    with pytest.raises(SubmitRefused):
+        browser.submit("#submit", "not an authorization")
 
 
 def test_form_controls_are_filled_without_submitting(browser, site, tmp_path) -> None:

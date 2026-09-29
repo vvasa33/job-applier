@@ -6,56 +6,28 @@ from fastapi.testclient import TestClient
 
 from jobhunter.api.app import create_app
 from jobhunter.apply.decisions import ApplicantData, DecisionSource, KnownFact
-from jobhunter.apply.runner import page_context, pending_fields, refuse_submit, respond, resume_page, run_page, waiting_applications
+from jobhunter.apply.runner import (
+    page_context,
+    pending_fields,
+    respond,
+    resume_page,
+    run_page,
+    unresolved_required,
+    waiting_applications,
+)
+from jobhunter.apply.submission import SubmitPolicy, answers_fingerprint, authorize
 from jobhunter.applications import change_status, open_application
-from jobhunter.browser.errors import BrowserError, NavigationTimeout, SubmitRefused
 from jobhunter.browser.manager import BrowserManager
 from jobhunter.db.models import Application, ApplicationAnswer, ApplicationEvent
 from jobhunter.db.records import JobSighting, add_master_resume, add_resume_version, record_job_sighting
 from jobhunter.domain.enums import ApplicationStatus, EventActor, ResumeVersionKind, ValueSource
 from jobhunter.domain.errors import ApplicationTransitionError
+from tests.apply_fakes import FakeBrowser
 from tests.browser_fixture import FormServer
 
 APPLICATION = Path(__file__).resolve().parent / "fixtures" / "forms" / "workday-application.html"
 SEARCH = Path(__file__).resolve().parent / "fixtures" / "forms" / "workday-search.html"
 APPLY_URL = "http://jobs.example/northwind/apply"
-
-
-class FakeBrowser:
-    def __init__(self, html: str, *, fail: str | None = None) -> None:
-        self.location = "about:blank"
-        self._html = html
-        self.fail = fail
-        self.calls: list[tuple] = []
-
-    def navigate(self, url: str, expect: str | None = None, timeout_ms: int | None = None) -> None:
-        if self.fail == "navigate":
-            raise NavigationTimeout("navigation timed out")
-        self.calls.append(("navigate", url))
-        self.location = url
-
-    def form_html(self) -> str:
-        return self._html
-
-    def fill(self, selector: str, value: str) -> None:
-        if self.fail == "fill":
-            raise BrowserError("fill failed")
-        self.calls.append(("fill", selector, value))
-
-    def click(self, selector: str) -> None:
-        self.calls.append(("click", selector))
-
-    def select(self, selector: str, value: str) -> None:
-        self.calls.append(("select", selector, value))
-
-    def upload(self, selector: str, path: Path) -> None:
-        self.calls.append(("upload", selector, path))
-
-    def screenshot(self, path: Path) -> Path:
-        self.calls.append(("screenshot", str(path)))
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(b"\x89PNG\r\n\x1a\n")
-        return path
 
 
 def _ready(session, url: str = APPLY_URL) -> Application:
@@ -172,7 +144,7 @@ def test_a_fill_failure_stops_the_page(db_session) -> None:
     assert ("click", "#submit") not in browser.calls
 
 
-def test_resume_enters_only_the_provided_answers_and_still_refuses_to_submit(db_session) -> None:
+def test_resume_enters_the_answers_and_never_submits_from_a_page_with_next(db_session) -> None:
     application = _ready(db_session)
     browser = FakeBrowser(APPLICATION.read_text(encoding="utf-8"))
     run_page(db_session, application, browser, _facts())
@@ -190,25 +162,32 @@ def test_resume_enters_only_the_provided_answers_and_still_refuses_to_submit(db_
         },
     )
 
-    assert application.status is ApplicationStatus.applying
     assert ("fill", "#why", "I want the compiler work on the posting.") in browser.calls
     assert ("click", "#country") in browser.calls
     assert ("click", "#country-us") in browser.calls
+    assert ("click", "#next") in browser.calls
     assert ("click", "#submit") not in browser.calls
-    with pytest.raises(SubmitRefused, match="Autonomous submission is not enabled"):
-        refuse_submit(db_session, application)
-    assert any(event.event_type == "submit_blocked" for event in _events(db_session, application))
-    assert ("click", "#submit") not in browser.calls
+    assert browser.submits == []
+    assert application.status is ApplicationStatus.waiting_for_user
+    assert "did not change" in page_context(db_session, application, None)["waiting_reason"]
 
 
 def test_submit_is_refused_while_required_fields_are_open(db_session) -> None:
     application = _ready(db_session)
     browser = FakeBrowser(APPLICATION.read_text(encoding="utf-8"))
     run_page(db_session, application, browser, _facts())
-    with pytest.raises(SubmitRefused, match="not resolved"):
-        refuse_submit(db_session, application)
-    assert application.status is ApplicationStatus.waiting_for_user
-    assert ("click", "#submit") not in browser.calls
+    change_status(db_session, application, to=ApplicationStatus.applying, actor=EventActor.user, reason="Check.")
+    decision = authorize(
+        db_session,
+        application,
+        unresolved=unresolved_required(db_session, application),
+        fingerprint=answers_fingerprint(db_session, application),
+        policy=SubmitPolicy(),
+    )
+    assert decision.allowed is False
+    assert decision.needs_confirmation is False
+    assert "not resolved" in decision.reason
+    assert browser.submits == []
 
 
 def test_applying_cannot_start_before_the_application_is_ready(db_session) -> None:
@@ -247,9 +226,9 @@ def test_an_attestation_is_filled_only_after_the_user_answers(db_session) -> Non
 
     resume_page(db_session, application, browser, ApplicantData(), {"agree": "yes"})
     assert ("click", "#agree") in browser.calls
-    assert application.status is ApplicationStatus.applying
-    with pytest.raises(SubmitRefused, match="not enabled"):
-        refuse_submit(db_session, application)
+    assert application.status is ApplicationStatus.waiting_for_user
+    assert "no Next or Submit" in page_context(db_session, application, None)["waiting_reason"]
+    assert browser.submits == []
 
 
 def test_api_runs_against_the_provided_browser_and_returns_pending_fields(settings) -> None:
@@ -276,9 +255,8 @@ def test_api_runs_against_the_provided_browser_and_returns_pending_fields(settin
     assert any(field["field_id"] == "workAuthorization" for field in body["pending_fields"])
     assert ("fill", "#email", "ada@example.com") in browser.calls
 
-    blocked = client.post(f"/api/applications/{application_id}/submit")
-    assert blocked.status_code == 409
-    assert "not resolved" in blocked.json()["detail"]
+    assert body["pause_kind"] == "questions"
+    assert client.post(f"/api/applications/{application_id}/submit").status_code in (404, 405)
     assert ("click", "#submit") not in browser.calls
 
 
@@ -340,6 +318,10 @@ def test_approve_records_the_suggestion_and_continues(db_session) -> None:
     run_page(db_session, application, browser, applicant)
     browser.calls.clear()
     respond(db_session, application, browser, applicant, action="approve", field_id="question-123")
+    assert browser.calls == []
+    assert application.status is ApplicationStatus.waiting_for_user
+    for field in pending_fields(db_session, application):
+        respond(db_session, application, browser, applicant, action="skip", field_id=field["field_id"])
 
     assert ("fill", "#why", draft) in browser.calls
     assert ("click", "#submit") not in browser.calls
@@ -368,6 +350,9 @@ def test_edit_records_a_user_answer(db_session) -> None:
         field_id="country",
         value="United States",
     )
+    assert ("click", "#country-us") not in browser.calls
+    for field in pending_fields(db_session, application):
+        respond(db_session, application, browser, _facts(), action="skip", field_id=field["field_id"])
 
     assert ("click", "#country-us") in browser.calls
     answer = _answer(db_session, application, "country")
@@ -432,9 +417,18 @@ def test_a_skipped_required_field_still_blocks_submit(db_session) -> None:
     run_page(db_session, application, browser, ApplicantData())
     respond(db_session, application, browser, ApplicantData(), action="skip", field_id="agree")
     assert ("click", "#agree") not in browser.calls
-    assert application.status is ApplicationStatus.applying
-    with pytest.raises(SubmitRefused, match="not resolved"):
-        refuse_submit(db_session, application)
+    assert unresolved_required(db_session, application) == ["agree"]
+    change_status(db_session, application, to=ApplicationStatus.applying, actor=EventActor.user, reason="Check.")
+    decision = authorize(
+        db_session,
+        application,
+        unresolved=unresolved_required(db_session, application),
+        fingerprint=answers_fingerprint(db_session, application),
+        policy=SubmitPolicy(),
+    )
+    assert decision.allowed is False
+    assert "not resolved" in decision.reason
+    assert browser.submits == []
 
 
 def test_the_queue_lists_only_applications_waiting_for_input(db_session) -> None:
@@ -493,8 +487,20 @@ def test_api_review_queue_serves_the_page_image_and_records_the_decision(setting
     )
     assert approved.status_code == 200
     assert approved.json()["status"] == "waiting_for_user"
-    assert all(field["field_id"] != "question-123" for field in approved.json()["pending_fields"])
+    remaining = approved.json()["pending_fields"]
+    assert remaining
+    assert all(field["field_id"] != "question-123" for field in remaining)
+    for field in remaining:
+        skipped = client.post(
+            f"/api/applications/{application_id}/review",
+            json={"action": "skip", "field_id": field["field_id"]},
+        )
+        assert skipped.status_code == 200
     assert ("fill", "#why", "I want the compiler work.") in browser.calls
+    assert skipped.json()["pause_kind"] == "needs_look"
+    continued = client.post(f"/api/applications/{application_id}/review", json={"action": "continue"})
+    assert continued.status_code == 200
+    assert continued.json()["status"] == "waiting_for_user"
     assert ("click", "#submit") not in browser.calls
 
     stopped = client.post(

@@ -104,3 +104,19 @@ class AgentRunStatus(StrEnum):
 class AgentRunTrigger(StrEnum):
     schedule = "schedule"
     manual = "manual"
+
+
+class AgentDesired(StrEnum):
+    running = "running"
+    stopped = "stopped"
+
+
+class AgentPhase(StrEnum):
+    stopped = "stopped"
+    starting = "starting"
+    idle = "idle"
+    discovering = "discovering"
+    preparing = "preparing"
+    applying = "applying"
+    waiting_for_user = "waiting_for_user"
+    stopping = "stopping"

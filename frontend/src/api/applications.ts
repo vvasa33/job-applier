@@ -40,9 +40,20 @@ export type ReviewItem = {
   question_label: string | null;
   waiting_reason: string | null;
   has_screenshot: boolean;
+  pause_kind: PauseKind | null;
+  resume_queued: boolean;
 };
 
-export type ReviewAction = "approve" | "edit" | "skip" | "stop";
+export type PauseKind = "questions" | "confirm_submit" | "needs_look" | "verify_submit";
+
+export type ReviewAction =
+  | "approve"
+  | "edit"
+  | "skip"
+  | "stop"
+  | "continue"
+  | "confirm_submit"
+  | "confirm_submitted";
 
 export type ApplicationDetail = {
   id: number;
@@ -63,7 +74,22 @@ export type ApplicationDetail = {
   page_title: string | null;
   has_screenshot: boolean;
   waiting_reason: string | null;
+  pause_kind: PauseKind | null;
+  resume_queued: boolean;
+  submit_attempted: boolean;
+  agent_owns_browser: boolean;
 };
+
+export function reviewOutcome(application: ApplicationDetail): string {
+  if (application.status === "withdrawn") return "The application was stopped.";
+  if (application.status === "submitted") return "Submitted. The confirmation is saved in the history.";
+  if (application.status !== "waiting_for_user") return "Saved. The application continued.";
+  if (application.resume_queued) return "Saved. The agent will continue this application in its browser.";
+  if (application.pause_kind === "confirm_submit") return "Every question is answered. Confirm to submit.";
+  if (application.pause_kind === "verify_submit") return "Check whether the submission went through.";
+  if (application.pause_kind === "needs_look") return "Saved. The page needs a look before it can continue.";
+  return "Saved. The next question is ready.";
+}
 
 export class ApplicationRequestError extends Error {
   status: number;

@@ -21,22 +21,24 @@ from jobhunter.api.schemas import (
     RunApplicationRequest,
     TransitionRequest,
 )
+from jobhunter.agent import store
+from jobhunter.agent.config import AgentConfigError, applicant_for, submit_policy
 from jobhunter.apply.decisions import ApplicantData, DecisionSource, KnownFact
 from jobhunter.apply.runner import (
     page_context,
     pending_fields,
-    refuse_submit,
+    record_answer,
+    request_resume,
     respond,
     resume_page,
     run_page,
     waiting_applications,
 )
 from jobhunter.applications import application_for_job, change_status, open_application
-from jobhunter.browser.errors import SubmitRefused
 from jobhunter.browser.manager import BrowserManager
 from jobhunter.db.models import Application, ApplicationEvent, Job, ResumeVersion
 from jobhunter.domain.application_flow import allowed_targets
-from jobhunter.domain.enums import EventActor
+from jobhunter.domain.enums import ApplicationStatus, EventActor, ValueSource
 from jobhunter.domain.errors import ApplicationTransitionError, DuplicateApplication
 
 router = APIRouter(prefix="/api", tags=["applications"])
@@ -136,19 +138,20 @@ def review_application(
     application = _application(db, application_id)
     browser = None
     owned = False
-    if body.action != "stop":
+    if body.action not in {"stop", "confirm_submitted"} and not _agent_owns_browser(db):
         browser, owned = _browser(request)
     try:
         respond(
             db,
             application,
             browser,
-            _applicant(application, body),
+            _applicant(request, application, body),
             action=body.action,
             field_id=body.field_id,
             value=body.value,
             actor=EventActor.user,
             screenshot_dir=_screenshot_dir(request),
+            policy=_policy(request, db),
         )
         db.commit()
     except ApplicationTransitionError as exc:
@@ -168,14 +171,21 @@ def run_application(
     db: Session = Depends(get_db),
 ) -> ApplicationResponse:
     application = _application(db, application_id)
+    if _agent_owns_browser(db):
+        raise HTTPException(
+            status_code=409,
+            detail="The agent is running and owns the browser; it starts ready applications itself.",
+        )
     browser, owned = _browser(request)
     try:
         run_page(
             db,
             application,
             browser,
-            _applicant(application, body or RunApplicationRequest()),
+            _applicant(request, application, body or RunApplicationRequest()),
+            actor=EventActor.user,
             screenshot_dir=_screenshot_dir(request),
+            policy=_policy(request, db),
         )
         db.commit()
     except ApplicationTransitionError as exc:
@@ -195,16 +205,25 @@ def resume_application(
     db: Session = Depends(get_db),
 ) -> ApplicationResponse:
     application = _application(db, application_id)
+    if _agent_owns_browser(db):
+        try:
+            _queue_answers(db, application, body.answers)
+            db.commit()
+        except ApplicationTransitionError as exc:
+            db.rollback()
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return _response(db, application, _screenshot_dir(request))
     browser, owned = _browser(request)
     try:
         resume_page(
             db,
             application,
             browser,
-            _applicant(application, body),
+            _applicant(request, application, body),
             body.answers,
             actor=EventActor.user,
             screenshot_dir=_screenshot_dir(request),
+            policy=_policy(request, db),
         )
         db.commit()
     except ApplicationTransitionError as exc:
@@ -216,19 +235,17 @@ def resume_application(
     return _response(db, application, _screenshot_dir(request))
 
 
-@router.post("/applications/{application_id}/submit", response_model=ApplicationResponse)
-def submit_application(
-    application_id: int,
-    request: Request,
-    db: Session = Depends(get_db),
-) -> ApplicationResponse:
-    application = _application(db, application_id)
-    try:
-        refuse_submit(db, application, actor=EventActor.user)
-    except SubmitRefused as exc:
-        db.commit()
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    return _response(db, application, _screenshot_dir(request))
+def _queue_answers(session: Session, application: Application, answers: dict[str, str]) -> None:
+    """Store answers for the agent worker, which resumes the application in its own browser."""
+
+    if application.status is not ApplicationStatus.waiting_for_user:
+        raise ApplicationTransitionError("answers are only for an application that is waiting for the user")
+    cleaned = {field_id: value.strip() for field_id, value in answers.items()}
+    if any(not value for value in cleaned.values()):
+        raise ApplicationTransitionError("every answer needs a value")
+    for field_id, value in cleaned.items():
+        record_answer(session, application, field_id, value, ValueSource.human, EventActor.user)
+    request_resume(session, application, EventActor.user, f"Answers provided for {', '.join(sorted(cleaned))}.")
 
 
 def _application(session: Session, application_id: int) -> Application:
@@ -236,6 +253,17 @@ def _application(session: Session, application_id: int) -> Application:
     if application is None:
         raise HTTPException(status_code=404, detail="Application not found")
     return application
+
+
+def _agent_owns_browser(session: Session) -> bool:
+    return store.worker_alive(store.state(session))
+
+
+def _policy(request: Request, session: Session):
+    try:
+        return submit_policy(session, request.app.state.settings)
+    except AgentConfigError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 def _browser(request: Request) -> tuple[BrowserManager, bool]:
@@ -252,17 +280,22 @@ def _screenshot_dir(request: Request) -> Path:
 
 
 def _applicant(
+    request: Request,
     application: Application,
     body: RunApplicationRequest | ResumeApplicationRequest | ReviewRequest,
 ) -> ApplicantData:
-    return ApplicantData(
-        facts=[_fact(fact) for fact in body.facts],
-        resume_path=body.resume_path,
-        resume_text=body.resume_text,
-        job_title=application.job.title,
-        company=application.job.company_name,
-        job_description=application.job.description_text,
-    )
+    try:
+        applicant = applicant_for(
+            request.app.state.settings,
+            application,
+            extra=[_fact(fact) for fact in body.facts],
+            resume_text=body.resume_text,
+        )
+    except AgentConfigError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    if body.resume_path:
+        applicant = applicant.model_copy(update={"resume_path": body.resume_path})
+    return applicant
 
 
 def _fact(fact: ApplicantFactIn) -> KnownFact:
@@ -307,6 +340,10 @@ def _response(session: Session, application: Application, screenshot_dir: Path) 
         page_title=context["page_title"],
         has_screenshot=context["has_screenshot"],
         waiting_reason=context["waiting_reason"],
+        pause_kind=context["pause_kind"],
+        resume_queued=context["resume_queued"],
+        submit_attempted=context["submit_attempted"],
+        agent_owns_browser=_agent_owns_browser(session),
     )
 
 
@@ -324,6 +361,8 @@ def _review_item(session: Session, application: Application, screenshot_dir: Pat
         question_label=None if first is None else str(first.get("label") or first.get("field_id") or ""),
         waiting_reason=context["waiting_reason"],
         has_screenshot=context["has_screenshot"],
+        pause_kind=context["pause_kind"],
+        resume_queued=context["resume_queued"],
     )
 
 

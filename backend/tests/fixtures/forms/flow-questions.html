@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Application Questions</title>
+</head>
+<body>
+  <div data-automation-id="applyFlowPage">
+    <h2 data-automation-id="pageHeaderTitle">Application Questions</h2>
+    <div data-automation-id="formField-workAuthorization">
+      <label id="label-auth">Are you authorized to work in the United States?<span>*</span></label>
+      <div id="auth" role="radiogroup" data-automation-id="workAuthorization" aria-labelledby="label-auth" aria-required="true">
+        <input type="radio" name="auth" id="auth-yes" value="Yes">
+        <label for="auth-yes">Yes</label>
+        <input type="radio" name="auth" id="auth-no" value="No">
+        <label for="auth-no">No</label>
+      </div>
+    </div>
+    <button id="back" type="button" data-automation-id="pageFooterBackButton">Back</button>
+    <button id="next" type="button" data-automation-id="pageFooterNextButton">Save and Continue</button>
+  </div>
+  <script>
+    document.getElementById("next").addEventListener("click", () => {
+      if (!document.querySelector("input[name='auth']:checked")) return;
+      window.location.href = "flow-review.html";
+    });
+  </script>
+</body>
+</html>

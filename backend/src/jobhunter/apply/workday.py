@@ -5,7 +5,7 @@ from pathlib import Path
 
 from jobhunter.apply.fields import ApplicationField, NavigationButton, WorkdayPage
 from jobhunter.browser.errors import SubmitRefused
-from jobhunter.browser.manager import BrowserManager
+from jobhunter.browser.manager import BrowserManager, SubmitAuthorization
 
 _VOID = frozenset({"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"})
 _PLACEHOLDERS = frozenset({"", "select", "select one", "choose", "choose one"})
@@ -101,6 +101,13 @@ class WorkdayAdapter:
         if button.kind == "submit":
             raise SubmitRefused(f"refusing to submit the application: {button.label or button_id}")
         self._browser.click(button.selector)
+
+    def submit(self, authorization: SubmitAuthorization) -> None:
+        page = self.read_page()
+        buttons = [button for button in page.navigation if button.kind == "submit"]
+        if len(buttons) != 1:
+            raise WorkdayPageError(f"expected one submit button on this page, found {len(buttons)}")
+        self._browser.submit(buttons[0].selector, authorization)
 
     def _field(self, field_id: str, types: set[str]) -> ApplicationField:
         page = self.read_page()

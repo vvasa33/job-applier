@@ -5,6 +5,7 @@ import {
   fetchApplication,
   openApplication,
   reviewApplication,
+  reviewOutcome,
   transitionApplication,
   type ApplicationDetail,
   type ReviewAction,
@@ -67,9 +68,7 @@ export function ApplicationPanel({ jobId, onStatus }: { jobId: number; onStatus?
       const application = await reviewApplication(state.application.id, action, fieldId, value);
       setState({ phase: "ready", application });
       onStatus?.(application.status);
-      if (application.status === "withdrawn") setMessage("The application was stopped.");
-      else if (application.status === "waiting_for_user") setMessage("Saved. The next question is ready.");
-      else setMessage("Saved. The application continued and was not submitted.");
+      setMessage(reviewOutcome(application));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "The answer could not be saved.");
     } finally {

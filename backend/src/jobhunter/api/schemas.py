@@ -145,6 +145,10 @@ class ApplicationResponse(BaseModel):
     page_title: str | None = None
     has_screenshot: bool = False
     waiting_reason: str | None = None
+    pause_kind: str | None = None
+    resume_queued: bool = False
+    submit_attempted: bool = False
+    agent_owns_browser: bool = False
 
 
 class ReviewQueueItem(BaseModel):
@@ -157,6 +161,8 @@ class ReviewQueueItem(BaseModel):
     question_label: str | None = None
     waiting_reason: str | None = None
     has_screenshot: bool = False
+    pause_kind: str | None = None
+    resume_queued: bool = False
 
 
 class ApplicantFactIn(BaseModel):
@@ -180,7 +186,7 @@ class ResumeApplicationRequest(BaseModel):
 
 
 class ReviewRequest(BaseModel):
-    action: Literal["approve", "edit", "skip", "stop"]
+    action: Literal["approve", "edit", "skip", "stop", "continue", "confirm_submit", "confirm_submitted"]
     field_id: str = ""
     value: str | None = None
     facts: list[ApplicantFactIn] = Field(default_factory=list)
@@ -205,3 +211,56 @@ class DashboardResponse(BaseModel):
     application_count: int
     by_status: dict[str, int]
     recent: list[JobSummary]
+
+
+class AgentLimitsOut(BaseModel):
+    daily_applications: int
+    applications_today: int
+    daily_auto_submits: int
+    apply_interval_seconds: int
+    max_failures: int
+
+
+class AgentCurrentOut(BaseModel):
+    job_id: int | None
+    application_id: int | None
+    company: str | None
+    title: str | None
+    step: str | None
+
+
+class AgentStatusResponse(BaseModel):
+    desired: str
+    phase: str
+    alive: bool
+    pid: int | None
+    started_at: datetime | None
+    heartbeat_at: datetime | None
+    last_discovery_at: datetime | None
+    next_discovery_at: datetime | None
+    current: AgentCurrentOut
+    message: str | None
+    autonomy_level: str
+    discovery_interval_hours: int
+    waiting_for_user: int
+    submitted_today: int
+    failing: int
+    gave_up: int
+    sources_configured: int
+    sources_error: str | None
+    limits: AgentLimitsOut
+
+
+class AgentSettingsRequest(BaseModel):
+    autonomy_level: Literal["observe", "assist", "supervised"] | None = None
+    discovery_interval_hours: int | None = Field(default=None, ge=1, le=168)
+
+
+class AgentActivityOut(BaseModel):
+    id: int
+    created_at: datetime
+    level: str
+    kind: str
+    message: str
+    job_id: int | None
+    application_id: int | None

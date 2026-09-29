@@ -29,6 +29,15 @@ class Settings(BaseSettings):
     data_dir: Path = Field(default_factory=default_data_dir)
     log_level: str = "INFO"
     master_resume: Path | None = None
+    sources_file: Path | None = None
+    profile_file: Path | None = None
+    agent_poll_seconds: float = Field(default=1.0, gt=0, le=60)
+    agent_apply_interval_seconds: int = Field(default=120, ge=0)
+    agent_daily_applications: int = Field(default=10, ge=0)
+    agent_daily_auto_submits: int = Field(default=3, ge=0)
+    agent_prepare_per_cycle: int = Field(default=5, ge=0)
+    agent_max_failures: int = Field(default=3, ge=1, le=20)
+    agent_max_replays: int = Field(default=5, ge=1, le=50)
 
     @field_validator("host")
     @classmethod

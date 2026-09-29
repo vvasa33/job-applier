@@ -78,14 +78,21 @@ def run_dev() -> None:
         env=env,
         start_new_session=True,
     )
+    agent = subprocess.Popen(
+        [sys.executable, "-m", "jobhunter.cli", "agent"],
+        cwd=root / "backend",
+        env=env,
+        start_new_session=True,
+    )
 
     print(f"API  http://{settings.bind_host()}:{settings.port}/health", flush=True)
     print("UI   http://127.0.0.1:5173", flush=True)
+    print("Agent worker started; it stays stopped until you press Start in the UI.", flush=True)
 
     exit_code = 0
 
     def terminate() -> None:
-        for process in (web, api):
+        for process in (web, agent, api):
             if process.poll() is None:
                 try:
                     os.killpg(process.pid, signal.SIGTERM)
@@ -103,7 +110,7 @@ def run_dev() -> None:
 
     try:
         while True:
-            if api.poll() is not None or web.poll() is not None:
+            if api.poll() is not None or web.poll() is not None or agent.poll() is not None:
                 exit_code = 1
                 break
             time.sleep(0.4)
@@ -188,6 +195,8 @@ def main() -> None:
     sub.add_parser("dev", help="Start the API and the frontend")
     sub.add_parser("api", help="Start the API only")
     sub.add_parser("db-upgrade", help="Create or migrate the local SQLite database")
+    agent = sub.add_parser("agent", help="Run the agent worker (start and stop it from the UI)")
+    agent.add_argument("--start", action="store_true", help="Start the agent immediately")
     resume = sub.add_parser("resume", help="Validate or compile the master resume")
     resume_sub = resume.add_subparsers(dest="resume_command")
     resume_sub.add_parser("validate", help="Check the configured master resume and store its structure")
@@ -203,6 +212,10 @@ def main() -> None:
         run_dev()
     elif args.command == "db-upgrade":
         init_database(get_settings())
+    elif args.command == "agent":
+        from jobhunter.agent.worker import run_worker
+
+        run_worker(get_settings(), start=args.start)
     elif args.command == "resume" and args.resume_command == "validate":
         run_resume_validate()
     elif args.command == "resume" and args.resume_command == "compile":

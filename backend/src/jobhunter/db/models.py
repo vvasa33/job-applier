@@ -22,6 +22,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from jobhunter.db.base import Base
 from jobhunter.domain.enums import (
+    AgentDesired,
+    AgentPhase,
     AgentRunKind,
     AgentRunStatus,
     AgentRunTrigger,
@@ -321,6 +323,57 @@ class AgentRun(Base):
     stats: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     idempotency_key: Mapped[str | None] = mapped_column(String(200), nullable=True, unique=True)
+
+
+class AgentState(Base):
+    """One row. The API writes `desired`; the worker writes everything else."""
+
+    __tablename__ = "agent_state"
+    __table_args__ = (CheckConstraint("id = 1", name="ck_agent_state_singleton"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    desired: Mapped[AgentDesired] = mapped_column(_enum(AgentDesired, length=16), nullable=False)
+    phase: Mapped[AgentPhase] = mapped_column(_enum(AgentPhase, length=32), nullable=False)
+    pid: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_discovery_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    next_discovery_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    current_job_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    current_application_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    current_step: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    message: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class AgentActivity(Base):
+    __tablename__ = "agent_activity"
+    __table_args__ = (Index("ix_agent_activity_created", "created_at"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    level: Mapped[str] = mapped_column(String(16), nullable=False)
+    kind: Mapped[str] = mapped_column(String(64), nullable=False)
+    message: Mapped[str] = mapped_column(String(1000), nullable=False)
+    job_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    application_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    data: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+
+
+class AgentAttempt(Base):
+    """Failure count for one unit of work, so a broken job is retried a bounded number of times."""
+
+    __tablename__ = "agent_attempts"
+    __table_args__ = (UniqueConstraint("stage", "subject_id", name="uq_agent_attempts_subject"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    stage: Mapped[str] = mapped_column(String(32), nullable=False)
+    subject_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    failures: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    gave_up: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 
 class UserSettings(Base):

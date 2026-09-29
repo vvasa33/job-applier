@@ -1,4 +1,4 @@
-"""Workday page interaction and field decisions. Decisions never invent answers, and nothing here submits an application."""
+"""Workday page interaction, field decisions, and the submit gate. Decisions never invent answers."""
 
 from jobhunter.apply.decisions import (
     ApplicantData,
@@ -9,7 +9,8 @@ from jobhunter.apply.decisions import (
     decide,
 )
 from jobhunter.apply.fields import ApplicationField, NavigationButton, WorkdayPage
-from jobhunter.apply.runner import page_context, refuse_submit, respond, resume_page, run_page, waiting_applications
+from jobhunter.apply.runner import page_context, respond, resume_page, run_page, waiting_applications
+from jobhunter.apply.submission import SubmitDecision, SubmitPolicy, authorize
 from jobhunter.apply.workday import WorkdayAdapter, WorkdayPageError, parse_workday_document
 
 __all__ = [
@@ -20,13 +21,15 @@ __all__ = [
     "FieldDecision",
     "KnownFact",
     "NavigationButton",
+    "SubmitDecision",
+    "SubmitPolicy",
     "WorkdayAdapter",
     "WorkdayPage",
     "WorkdayPageError",
+    "authorize",
     "decide",
-    "parse_workday_document",
     "page_context",
-    "refuse_submit",
+    "parse_workday_document",
     "respond",
     "resume_page",
     "run_page",

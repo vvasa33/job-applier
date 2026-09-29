@@ -1,4 +1,4 @@
-"""Drive one visible Chromium window. It can fill a form. It cannot submit one."""
+"""Drive one visible Chromium window. Ordinary actions refuse to submit; only `submit` with an authorization can."""
 
 import json
 from dataclasses import asdict, dataclass
@@ -86,6 +86,24 @@ _SUBMITS = """(el) => {
   }
   return false;
 }"""
+
+
+class SubmitAuthorization:
+    """Permission to press one submit control once. Only the application submit gate creates these."""
+
+    def __init__(self, reference: str, reason: str) -> None:
+        self.reference = reference
+        self.reason = reason
+        self._used = False
+
+    @property
+    def used(self) -> bool:
+        return self._used
+
+    def consume(self) -> None:
+        if self._used:
+            raise SubmitRefused(f"the submit authorization for {self.reference} was already used")
+        self._used = True
 
 
 @dataclass(frozen=True)
@@ -296,6 +314,31 @@ class BrowserManager:
             )
 
         return self._guard("read", "", "page structure", operation)
+
+    def submit(self, selector: str, authorization: SubmitAuthorization) -> None:
+        """Press a submit control. The authorization is consumed even if the click fails."""
+
+        if not isinstance(authorization, SubmitAuthorization):
+            raise SubmitRefused("a submit needs an authorization from the submit gate")
+        authorization.consume()
+
+        def operation() -> None:
+            self._require_page()
+            try:
+                self._page.click(selector)
+            except PlaywrightTimeout as exc:
+                raise BrowserError(f"submit timed out for {selector}") from exc
+
+        self._guard("submit", selector, authorization.reference, operation)
+
+    def settle(self, timeout_ms: int = 3000) -> None:
+        """Give the page a moment to finish loading after an action. A slow page is not an error."""
+
+        self._require_page()
+        try:
+            self._page.wait_for_load_state("networkidle", timeout=timeout_ms)
+        except (PlaywrightTimeout, PlaywrightError):
+            pass
 
     @property
     def location(self) -> str:

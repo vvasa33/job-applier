@@ -4,12 +4,22 @@ import {
   fetchApplicationById,
   fetchReviewQueue,
   reviewApplication,
+  reviewOutcome,
   type ApplicationDetail,
   type ReviewAction,
   type ReviewItem,
 } from "../api/applications";
 import { formatDateTime } from "../format";
 import { Intervention } from "./Intervention";
+
+const POLL_MS = 5000;
+
+function pauseLabel(item: ReviewItem): string {
+  if (item.resume_queued) return "Continuing in the agent's browser";
+  if (item.pause_kind === "confirm_submit") return "Ready to submit";
+  if (item.pause_kind === "verify_submit") return "Check whether it was submitted";
+  return item.question_label || item.waiting_reason || "Waiting for an answer";
+}
 
 export function ReviewQueue({ onOpen }: { onOpen: (path: string) => void }) {
   const [items, setItems] = useState<ReviewItem[] | null>(null);
@@ -53,6 +63,28 @@ export function ReviewQueue({ onOpen }: { onOpen: (path: string) => void }) {
     return () => controller.abort();
   }, [selectedId]);
 
+  useEffect(() => {
+    if (busy) return;
+    const timer = window.setInterval(() => {
+      void fetchReviewQueue()
+        .then((queue) => {
+          setItems(queue);
+          setSelectedId((current) =>
+            current !== null && queue.some((item) => item.application_id === current)
+              ? current
+              : (queue[0]?.application_id ?? null),
+          );
+        })
+        .catch(() => undefined);
+      if (selectedId !== null) {
+        void fetchApplicationById(selectedId)
+          .then(setDetail)
+          .catch(() => undefined);
+      }
+    }, POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [busy, selectedId]);
+
   async function reload(preferId: number | null) {
     const queue = await fetchReviewQueue();
     setItems(queue);
@@ -72,9 +104,7 @@ export function ReviewQueue({ onOpen }: { onOpen: (path: string) => void }) {
     try {
       const application = await reviewApplication(detail.id, action, fieldId, value);
       setDetail(application);
-      if (application.status === "withdrawn") setMessage("The application was stopped.");
-      else if (application.status === "waiting_for_user") setMessage("Saved. The next question is ready.");
-      else setMessage("Saved. The application continued and was not submitted.");
+      setMessage(reviewOutcome(application));
       await reload(application.status === "waiting_for_user" ? application.id : null);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "The answer could not be saved.");
@@ -94,7 +124,8 @@ export function ReviewQueue({ onOpen }: { onOpen: (path: string) => void }) {
     <div className="mt-10">
       <h1 className="text-3xl font-medium tracking-tight">Review</h1>
       <p className="mt-2 max-w-[62ch] text-[var(--muted)]">
-        Applications waiting for an answer. The question, suggestion, and page image are shown here.
+        Applications waiting for you: questions, submit confirmations, and pages that need a look. The page image is
+        shown with each one. This list refreshes on its own.
       </p>
       {items.length === 0 ? (
         <p className="mt-8 text-[var(--muted)]">No applications are waiting for an answer.</p>
@@ -118,7 +149,7 @@ export function ReviewQueue({ onOpen }: { onOpen: (path: string) => void }) {
                       <span className="font-medium">{item.title}</span>
                       <span className="text-sm text-[var(--muted)]">{item.company}</span>
                       <span className="text-sm">
-                        {item.question_label || item.waiting_reason || "Waiting for an answer"}
+                        {pauseLabel(item)}
                         {item.question_count > 1 ? ` · ${item.question_count} questions` : ""}
                       </span>
                       <span className="text-sm text-[var(--muted)]">{formatDateTime(item.waiting_since)}</span>

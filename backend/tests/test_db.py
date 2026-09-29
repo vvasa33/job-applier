@@ -34,5 +34,8 @@ def test_core_tables_are_registered() -> None:
         "application_events",
         "application_answers",
         "agent_runs",
+        "agent_state",
+        "agent_activity",
+        "agent_attempts",
         "user_settings",
     }

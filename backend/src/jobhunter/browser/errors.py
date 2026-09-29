@@ -1,4 +1,4 @@
-"""Failures from the visible browser. None of these submit a form."""
+"""Failures from the visible browser."""
 
 
 class BrowserError(Exception):
@@ -14,4 +14,4 @@ class UnexpectedPage(BrowserError):
 
 
 class SubmitRefused(BrowserError):
-    """The action would submit a form, which this milestone never does."""
+    """The action would submit a form without an unused authorization from the submit gate."""
