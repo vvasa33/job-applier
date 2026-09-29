@@ -1,7 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
 
-import { fetchJobs, type JobFilters, type JobList, type JobSummary } from "../api/jobs";
-import { APPLICATION_STATUSES, formatDate, JOB_STATUSES, label, place, workplaceLabel } from "../format";
+import { fetchJobs, type JobFilters, type JobList } from "../api/jobs";
+import { APPLICATION_STATUSES, JOB_STATUSES, label } from "../format";
+import { JobCard, Notice, Skeleton, controlClass } from "../ui";
 
 export function Jobs({
   filters,
@@ -12,6 +13,7 @@ export function Jobs({
   onChange: (next: JobFilters) => void;
   onOpen: (path: string) => void;
 }) {
+  const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<{ phase: "loading" } | { phase: "error" } | { phase: "ready"; data: JobList }>({
     phase: "loading",
   });
@@ -26,16 +28,26 @@ export function Jobs({
         if (!controller.signal.aborted) setState({ phase: "error" });
       });
     return () => controller.abort();
-  }, [filters]);
+  }, [filters, attempt]);
 
   return (
     <div className="mt-10">
       <h1 className="text-3xl font-medium tracking-tight">Jobs</h1>
       <p className="mt-2 text-[var(--muted)]">Search the postings already stored locally.</p>
       <Filters filters={filters} companies={state.phase === "ready" ? state.data.companies : []} onChange={onChange} />
-      {state.phase === "loading" ? <ListSkeleton /> : null}
+      {state.phase === "loading" ? (
+        <div className="mt-8 grid gap-3">
+          <Skeleton className="h-36" />
+          <Skeleton className="h-36" />
+        </div>
+      ) : null}
       {state.phase === "error" ? (
-        <p className="mt-8 text-[var(--muted)]">The job list could not be loaded. Check that the local API is running.</p>
+        <div className="mt-8 grid gap-3">
+          <Notice tone="out">The job list could not be loaded. Check that the local API is running.</Notice>
+          <button type="button" className="justify-self-start text-sm text-[var(--accent)]" onClick={() => setAttempt((n) => n + 1)}>
+            Try again
+          </button>
+        </div>
       ) : null}
       {state.phase === "ready" && state.data.jobs.length === 0 ? (
         <p className="mt-8 text-[var(--muted)]">
@@ -46,39 +58,19 @@ export function Jobs({
       ) : null}
       {state.phase === "ready" && state.data.jobs.length > 0 ? (
         <>
-          <p className="mt-6 text-sm text-[var(--muted)]">{state.data.total} matching</p>
-          <ul className="mt-2 divide-y divide-[var(--line)] border-y border-[var(--line)]">
+          <p className="mt-6 text-sm text-[var(--muted)]">
+            {state.data.total} {state.data.total === 1 ? "job" : "jobs"}
+          </p>
+          <ul className="mt-3 grid gap-3">
             {state.data.jobs.map((job) => (
               <li key={job.id}>
-                <button type="button" className="w-full py-4 text-left" onClick={() => onOpen(`/jobs/${job.id}`)}>
-                  <JobCard job={job} />
-                </button>
+                <JobCard job={job} onOpen={onOpen} />
               </li>
             ))}
           </ul>
         </>
       ) : null}
     </div>
-  );
-}
-
-function JobCard({ job }: { job: JobSummary }) {
-  return (
-    <span className="grid gap-2">
-      <span className="flex flex-wrap items-baseline justify-between gap-2">
-        <span className="text-lg font-medium">{job.title}</span>
-        <span className="text-sm capitalize text-[var(--muted)]">{label(job.application_status ?? "no application")}</span>
-      </span>
-      <span className="text-sm text-[var(--muted)]">{job.company}</span>
-      <span className="text-sm">
-        {place(job)} · {workplaceLabel(job.workplace)}
-      </span>
-      <span className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-[var(--muted)]">
-        <span>{job.sources.length > 0 ? job.sources.join(", ") : "Unknown source"}</span>
-        <span>Discovered {formatDate(job.first_seen_at)}</span>
-        <span className="capitalize">{label(job.status)}</span>
-      </span>
-    </span>
   );
 }
 
@@ -172,18 +164,6 @@ function Field({ label: name, children }: { label: string; children: ReactNode }
   );
 }
 
-const controlClass =
-  "h-10 rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3 text-sm text-[var(--fg)]";
-
 function hasFilter(filters: JobFilters): boolean {
   return Object.values(filters).some((value) => value.trim() !== "");
-}
-
-function ListSkeleton() {
-  return (
-    <div className="mt-8 space-y-3" aria-hidden="true">
-      <div className="h-16 rounded-xl bg-[var(--line)]" />
-      <div className="h-16 rounded-xl bg-[var(--line)]" />
-    </div>
-  );
 }

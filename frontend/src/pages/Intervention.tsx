@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useState } from "react";
 
 import type { ApplicationDetail, ReviewAction } from "../api/applications";
+import { buttonClass, controlClass, primaryClass } from "../ui";
 
 export function Intervention({
   application,
@@ -49,7 +50,19 @@ export function Intervention({
             <p className="mt-1">{suggestion || "No answer was suggested."}</p>
             <p className="mt-3 text-sm text-[var(--muted)]">Why this was suggested</p>
             <p className="mt-1 text-sm">{question.reasoning || "The system did not explain a suggestion."}</p>
-            <p className="mt-3 text-sm">Confidence {Math.round(question.confidence * 100)}%</p>
+            <p className="mt-3 text-sm">
+              <span className="text-[var(--muted)]">Confidence </span>
+              <meter
+                min={0}
+                max={1}
+                value={question.confidence}
+                className="align-middle"
+                aria-label="Suggestion confidence"
+              >
+                {Math.round(question.confidence * 100)}%
+              </meter>
+              <span className="ml-2 tabular-nums">{Math.round(question.confidence * 100)}%</span>
+            </p>
           </div>
 
           {editing ? (
@@ -213,7 +226,7 @@ function PageContext({ application }: { application: ApplicationDetail }) {
       {application.has_screenshot ? (
         <img
           src={`/api/applications/${application.id}/screenshot?at=${encodeURIComponent(application.status_changed_at)}`}
-          alt="Application page"
+          alt={`Application page for ${application.title} at ${application.company}`}
           className="max-h-[28rem] w-full rounded-xl border border-[var(--line)] bg-[var(--panel)] object-contain object-top"
         />
       ) : (
@@ -253,8 +266,3 @@ function StopButton({
   );
 }
 
-const controlClass = "h-10 rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3 text-sm text-[var(--fg)]";
-const buttonClass =
-  "inline-flex h-10 items-center rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3 text-sm disabled:opacity-50";
-const primaryClass =
-  "inline-flex h-10 items-center rounded-xl bg-[var(--accent)] px-3 text-sm text-[var(--accent-fg)] disabled:opacity-50";

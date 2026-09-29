@@ -10,7 +10,8 @@ import {
   type ApplicationDetail,
   type ReviewAction,
 } from "../api/applications";
-import { formatDateTime, label } from "../format";
+import { formatDateTime, formatUsd, label } from "../format";
+import { Chip, Notice, Skeleton, Timeline, TimelineItem, buttonClass, controlClass, statusTone } from "../ui";
 import { Intervention } from "./Intervention";
 
 export function ApplicationPanel({ jobId, onStatus }: { jobId: number; onStatus?: (status: string | null) => void }) {
@@ -93,10 +94,14 @@ export function ApplicationPanel({ jobId, onStatus }: { jobId: number; onStatus?
   }
 
   if (state.phase === "loading") {
-    return <div className="mt-10 h-24 rounded-xl bg-[var(--line)]" aria-hidden="true" />;
+    return <Skeleton className="mt-10 h-28" />;
   }
   if (state.phase === "error") {
-    return <p className="mt-10 text-[var(--muted)]">The application could not be loaded.</p>;
+    return (
+      <div className="mt-10">
+        <Notice tone="out">The application could not be loaded.</Notice>
+      </div>
+    );
   }
 
   return (
@@ -114,7 +119,7 @@ export function ApplicationPanel({ jobId, onStatus }: { jobId: number; onStatus?
               placeholder="Optional reason for opening it"
             />
           </label>
-          <button type="button" className={buttonClass} disabled={pending} onClick={() => void start()}>
+          <button type="button" className={`${buttonClass} mt-2`} disabled={pending} onClick={() => void start()}>
             Track this job
           </button>
         </div>
@@ -156,34 +161,39 @@ function ApplicationBody({
 }) {
   const needsVersion = application.allowed_transitions.includes("ready_to_apply");
   const selectedVersion = versionId || (application.resume_version ? String(application.resume_version.id) : "");
-  const stamps: [string, string | null][] = [
-    ["Opened", application.opened_at],
-    ["Status changed", application.status_changed_at],
-    ["Applying started", application.started_at],
-    ["Submitted", application.submitted_at],
-  ];
+  const visited = new Set(
+    application.history.map((event) => event.to_status).filter((status): status is string => Boolean(status)),
+  );
+  visited.add(application.status);
 
   return (
-    <div className="mt-3">
-      <p className="text-sm">
-        Status <span className="capitalize font-medium">{label(application.status)}</span>
-      </p>
-      <dl className="mt-4 divide-y divide-[var(--line)] border-y border-[var(--line)]">
-        {stamps.map(([name, value]) => (
-          <div key={name} className="grid gap-1 py-3 md:grid-cols-[12rem_1fr]">
-            <dt className="text-sm text-[var(--muted)]">{name}</dt>
-            <dd className="text-sm">{formatDateTime(value)}</dd>
-          </div>
-        ))}
-        <div className="grid gap-1 py-3 md:grid-cols-[12rem_1fr]">
-          <dt className="text-sm text-[var(--muted)]">Resume version</dt>
-          <dd className="break-all font-mono text-sm">
-            {application.resume_version
-              ? `#${application.resume_version.id} ${application.resume_version.sha256.slice(0, 12)}`
-              : "None attached"}
-          </dd>
-        </div>
-      </dl>
+    <div className="mt-3 grid gap-6">
+      <div className="flex flex-wrap items-center gap-2">
+        <Chip tone={statusTone(application.status)}>{label(application.status)}</Chip>
+        <span className="text-sm tabular-nums text-[var(--muted)]">{formatUsd(application.ai_cost_usd)} estimated</span>
+      </div>
+      <ol className="flex gap-2 overflow-x-auto pb-1" aria-label="Application progress">
+        {PIPELINE.map((status) => {
+          const current = status === application.status;
+          const seen = visited.has(status);
+          return (
+            <li
+              key={status}
+              aria-current={current ? "step" : undefined}
+              className={
+                current
+                  ? "shrink-0 rounded-xl bg-[var(--accent)] px-3 py-2 text-xs text-[var(--accent-fg)]"
+                  : seen
+                    ? "shrink-0 rounded-xl bg-[var(--fit-bg)] px-3 py-2 text-xs text-[var(--fit)]"
+                    : "shrink-0 rounded-xl border border-[var(--line)] px-3 py-2 text-xs text-[var(--muted)]"
+              }
+            >
+              {label(status)}
+            </li>
+          );
+        })}
+      </ol>
+      <ResumeChanges application={application} />
 
       {application.status === "waiting_for_user" ? (
         <div className="mt-6">
@@ -247,22 +257,71 @@ function ApplicationBody({
         <p className="mt-4 text-sm text-[var(--muted)]">This status does not lead anywhere else.</p>
       )}
 
-      <h3 className="mt-8 text-base font-medium">History</h3>
-      <ol className="mt-3 divide-y divide-[var(--line)] border-y border-[var(--line)]">
-        {application.history.map((event) => (
-          <li key={event.id} className="py-3 text-sm">
-            <p>
-              {sentence(event.to_status ? label(event.to_status) : label(event.event_type))}
-              {event.from_status ? `, from ${label(event.from_status)}` : ""}
-            </p>
-            <p className="mt-1 text-[var(--muted)]">
-              {formatDateTime(event.created_at)} · {event.actor}
-              {event.resume_version_id ? ` · resume #${event.resume_version_id}` : ""}
-            </p>
-            {event.reason ? <p className="mt-1">{event.reason}</p> : null}
-          </li>
-        ))}
-      </ol>
+      <section className="grid gap-3">
+        <h3 className="text-base font-medium">Activity</h3>
+        {application.history.length === 0 ? (
+          <p className="text-sm text-[var(--muted)]">No events yet.</p>
+        ) : (
+          <Timeline>
+            {[...application.history].reverse().map((event) => (
+              <TimelineItem
+                key={event.id}
+                time={`${formatDateTime(event.created_at)} · ${event.actor}`}
+                title={sentence(event.to_status ? label(event.to_status) : label(event.event_type))}
+                tone={statusTone(event.to_status)}
+              >
+                {event.from_status ? <p className="text-sm text-[var(--muted)]">From {label(event.from_status)}</p> : null}
+                {event.resume_version_id ? <p className="text-sm text-[var(--muted)]">Resume #{event.resume_version_id}</p> : null}
+                {event.reason ? <p className="text-sm">{event.reason}</p> : null}
+              </TimelineItem>
+            ))}
+          </Timeline>
+        )}
+      </section>
+    </div>
+  );
+}
+
+const PIPELINE = ["found", "matched", "saved", "tailoring", "ready_to_apply", "applying", "waiting_for_user", "submitted"];
+
+function ResumeChanges({ application }: { application: ApplicationDetail }) {
+  if (application.resume_versions.length === 0) {
+    return <p className="text-sm text-[var(--muted)]">No tailored resume yet.</p>;
+  }
+  return (
+    <section className="grid gap-3">
+      <h3 className="text-base font-medium">Resume changes</h3>
+      <ul className="grid gap-3">
+        {application.resume_versions.map((version) => {
+          const attached = application.resume_version?.id === version.id;
+          return (
+            <li key={version.id} className="grid gap-2 rounded-xl border border-[var(--line)] bg-[var(--panel)] p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="font-medium">Version {version.id}</p>
+                {attached ? <Chip tone="fit">Attached</Chip> : null}
+              </div>
+              <p className="text-sm text-[var(--muted)]">
+                {formatDateTime(version.created_at)} · {formatUsd(version.ai_cost_usd)} to tailor
+              </p>
+              <p className="break-all font-mono text-xs text-[var(--muted)]">{version.sha256}</p>
+              <dl className="grid gap-1 text-sm">
+                {version.tex_path ? <Path name="TeX" value={version.tex_path} /> : null}
+                {version.pdf_path ? <Path name="PDF" value={version.pdf_path} /> : null}
+                {version.diff_path ? <Path name="Change record" value={version.diff_path} /> : null}
+              </dl>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+function Path({ name, value }: { name: string; value: string }) {
+  return (
+    <div className="grid gap-0.5">
+      <dt className="text-xs text-[var(--muted)]">{name}</dt>
+      <dd className="break-all font-mono text-xs">{value}</dd>
     </div>
   );
 }
@@ -270,7 +329,3 @@ function ApplicationBody({
 function sentence(value: string): string {
   return value ? value.slice(0, 1).toUpperCase() + value.slice(1) : value;
 }
-
-const controlClass = "h-10 rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3 text-sm text-[var(--fg)]";
-const buttonClass =
-  "mt-2 inline-flex h-10 items-center rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3 text-sm disabled:opacity-50";

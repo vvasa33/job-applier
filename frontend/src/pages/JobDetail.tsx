@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 
 import { fetchJob, type JobDetail as Detail } from "../api/jobs";
-import { formatDate, label, place, workplaceLabel } from "../format";
+import { formatDate, formatUsd, label, place, workplaceLabel } from "../format";
+import { Chip, MatchSignals, Notice, Skeleton, statusTone } from "../ui";
 import { ApplicationPanel } from "./ApplicationPanel";
 
 export function JobDetail({ id, onOpen }: { id: string; onOpen: (path: string) => void }) {
@@ -23,20 +24,30 @@ export function JobDetail({ id, onOpen }: { id: string; onOpen: (path: string) =
   }, [id]);
 
   if (state.phase === "loading") {
-    return <div className="mt-10 h-24 rounded-xl bg-[var(--line)]" aria-hidden="true" />;
+    return (
+      <div className="mt-10 grid gap-3">
+        <Skeleton className="h-8 w-2/3" />
+        <Skeleton className="h-16" />
+        <Skeleton className="h-40" />
+      </div>
+    );
   }
   if (state.phase === "missing") {
     return (
-      <div className="mt-10">
+      <div className="mt-10 grid gap-3">
         <p>That job is not in the local database.</p>
-        <button type="button" className="mt-4 text-sm text-[var(--accent)]" onClick={() => onOpen("/jobs")}>
+        <button type="button" className="justify-self-start text-sm text-[var(--accent)]" onClick={() => onOpen("/jobs")}>
           Back to jobs
         </button>
       </div>
     );
   }
   if (state.phase === "error") {
-    return <p className="mt-10 text-[var(--muted)]">The job could not be loaded. Check that the local API is running.</p>;
+    return (
+      <div className="mt-10">
+        <Notice tone="out">The job could not be loaded. Check that the local API is running.</Notice>
+      </div>
+    );
   }
 
   const job = state.job;
@@ -45,25 +56,15 @@ export function JobDetail({ id, onOpen }: { id: string; onOpen: (path: string) =
 
 function JobArticle({ job, onOpen }: { job: Detail; onOpen: (path: string) => void }) {
   const [shown, setShown] = useState(job);
-  const facts: [string, string][] = [
-    ["Company", shown.company],
-    ["Normalized company", shown.normalized_company],
-    ["Normalized title", shown.normalized_title],
+  const verified = shown.requirements.filter((item) => item.verified).length;
+  const posting: [string, string][] = [
     ["Location", place(shown)],
-    ["Location class", label(shown.location_class)],
     ["Workplace", workplaceLabel(shown.workplace)],
-    ["Internship", shown.is_internship === null ? "Unknown" : shown.is_internship ? "Yes" : "No"],
-    ["CS relevance", label(shown.cs_relevance)],
     ["Term", shown.term ?? "Not recorded"],
-    ["Status", label(shown.status)],
-    ["Status reason", shown.status_reason ?? "None"],
-    ["Application", shown.application_status ? label(shown.application_status) : "No application"],
-    ["Source", shown.sources.join(", ") || "Unknown"],
-    ["Requisition", shown.requisition_id ?? "None"],
-    ["Discovered", formatDate(shown.first_seen_at)],
     ["Posted", formatDate(shown.posted_at)],
-    ["Closed", formatDate(shown.closed_at)],
-    ["Dedup key", shown.dedup_key],
+    ["Discovered", formatDate(shown.first_seen_at)],
+    ["Source", shown.sources.join(", ") || "Unknown"],
+    ["Estimated AI cost", formatUsd(shown.ai_cost_usd)],
   ];
 
   return (
@@ -71,8 +72,18 @@ function JobArticle({ job, onOpen }: { job: Detail; onOpen: (path: string) => vo
       <button type="button" className="text-sm text-[var(--accent)]" onClick={() => onOpen("/jobs")}>
         Back to jobs
       </button>
-      <h1 className="mt-4 text-3xl font-medium tracking-tight">{shown.title}</h1>
-      <p className="mt-2 text-[var(--muted)]">{shown.company}</p>
+      <header className="mt-4 grid gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Chip tone={statusTone(shown.status)}>{label(shown.status)}</Chip>
+          <Chip tone={statusTone(shown.application_status)}>
+            {shown.application_status ? label(shown.application_status) : "No application"}
+          </Chip>
+        </div>
+        <h1 className="text-3xl font-medium tracking-tight">{shown.title}</h1>
+        <p className="text-[var(--muted)]">{shown.company}</p>
+        {shown.status_reason ? <p className="max-w-[65ch] leading-relaxed">{shown.status_reason}</p> : null}
+        <MatchSignals job={shown} cs={shown.cs_relevance} verified={verified} total={shown.requirements.length} />
+      </header>
       {shown.apply_url ? (
         <a
           href={shown.apply_url}
@@ -80,14 +91,14 @@ function JobArticle({ job, onOpen }: { job: Detail; onOpen: (path: string) => vo
           target="_blank"
           rel="noreferrer"
         >
-          Open application
+          Open posting
         </a>
       ) : null}
       <dl className="mt-8 max-w-3xl divide-y divide-[var(--line)] border-y border-[var(--line)]">
-        {facts.map(([name, value]) => (
+        {posting.map(([name, value]) => (
           <div key={name} className="grid gap-1 py-3 md:grid-cols-[12rem_1fr]">
             <dt className="text-sm text-[var(--muted)]">{name}</dt>
-            <dd className="break-words font-mono text-sm">{value}</dd>
+            <dd className="text-sm">{value}</dd>
           </div>
         ))}
       </dl>
@@ -127,16 +138,38 @@ function JobArticle({ job, onOpen }: { job: Detail; onOpen: (path: string) => vo
       {shown.requirements.length > 0 ? (
         <section className="mt-10 max-w-3xl">
           <h2 className="text-lg font-medium">Requirements</h2>
-          <ul className="mt-3 divide-y divide-[var(--line)] border-y border-[var(--line)]">
+          <ul className="mt-3 grid gap-2">
             {shown.requirements.map((item) => (
-              <li key={item.kind} className="py-3 text-sm">
-                <span className="capitalize">{label(item.kind)}</span>: {item.value}
-                {item.verified ? " (verified)" : ""}
+              <li key={item.kind} className="flex flex-wrap items-baseline justify-between gap-3 rounded-xl border border-[var(--line)] px-4 py-3 text-sm">
+                <span>
+                  <span className="text-[var(--muted)]">{label(item.kind)}</span>
+                  <span className="mt-1 block">{item.value}</span>
+                </span>
+                <Chip tone={item.verified ? "fit" : "neutral"}>{item.verified ? "Verified" : "Unverified"}</Chip>
               </li>
             ))}
           </ul>
         </section>
       ) : null}
+      <details className="mt-10 max-w-3xl">
+        <summary className="cursor-pointer text-sm text-[var(--muted)]">Stored record</summary>
+        <dl className="mt-3 divide-y divide-[var(--line)] border-y border-[var(--line)]">
+          {(
+            [
+              ["Normalized title", shown.normalized_title],
+              ["Normalized company", shown.normalized_company],
+              ["Requisition", shown.requisition_id ?? "None"],
+              ["Closed", formatDate(shown.closed_at)],
+              ["Dedup key", shown.dedup_key],
+            ] as const
+          ).map(([name, value]) => (
+            <div key={name} className="grid gap-1 py-3 md:grid-cols-[12rem_1fr]">
+              <dt className="text-sm text-[var(--muted)]">{name}</dt>
+              <dd className="break-words font-mono text-sm">{value}</dd>
+            </div>
+          ))}
+        </dl>
+      </details>
       {shown.possible_duplicate_of ? (
         <p className="mt-8 text-sm">
           Possible duplicate of{" "}

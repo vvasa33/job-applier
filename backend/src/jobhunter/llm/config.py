@@ -12,7 +12,27 @@ from jobhunter.local_env import load_local_env
 
 API_KEY_ENV = "JOBHUNTER_LLM_API_KEY"
 
-# Approximate USD per 1,000,000 tokens. This is an estimate, not an invoice.
+CHEAP = "cheap"
+STRONG = "strong"
+# Classification runs on the cheap tier. Tailoring and difficult questions use the strong tier.
+PURPOSE_TIERS = {
+    "job_analysis": CHEAP,
+    "semantic_matching": CHEAP,
+    "question_classification": CHEAP,
+    "question_suggestion": CHEAP,
+    "difficult_question": STRONG,
+    "resume_tailoring": STRONG,
+}
+_DEFAULT_MODELS = {CHEAP: "gpt-4.1-nano", STRONG: "gpt-4.1"}
+
+# Approximate USD per 1,000,000 input and output tokens. These are estimates, not an invoice.
+_PRICES = {
+    "gpt-4.1": (Decimal("2.00"), Decimal("8.00")),
+    "gpt-4.1-mini": (Decimal("0.40"), Decimal("1.60")),
+    "gpt-4.1-nano": (Decimal("0.10"), Decimal("0.40")),
+    "gpt-4o": (Decimal("2.50"), Decimal("10.00")),
+    "gpt-4o-mini": (Decimal("0.15"), Decimal("0.60")),
+}
 _INPUT_USD_PER_MILLION = Decimal("0.40")
 _OUTPUT_USD_PER_MILLION = Decimal("1.60")
 
@@ -30,9 +50,34 @@ def llm_base_url() -> str:
     return os.environ.get("JOBHUNTER_LLM_BASE_URL", "https://api.openai.com/v1").strip()
 
 
-def llm_model() -> str:
+def tier_for(purpose: str) -> str:
+    return PURPOSE_TIERS.get(purpose, STRONG)
+
+
+def llm_model_for(tier: str) -> str:
+    """JOBHUNTER_LLM_MODEL_CHEAP / _STRONG pick each tier. The older JOBHUNTER_LLM_MODEL sets the strong tier."""
+
     load_local_env()
-    return os.environ.get("JOBHUNTER_LLM_MODEL", "gpt-4.1-mini").strip() or "gpt-4.1-mini"
+    specific = os.environ.get(f"JOBHUNTER_LLM_MODEL_{tier.upper()}", "").strip()
+    if specific:
+        return specific
+    if tier == STRONG:
+        legacy = os.environ.get("JOBHUNTER_LLM_MODEL", "").strip()
+        if legacy:
+            return legacy
+    return _DEFAULT_MODELS[tier]
+
+
+def token_prices(model: str | None) -> tuple[Decimal, Decimal]:
+    """Unknown models are priced like gpt-4.1-mini."""
+
+    if model is None:
+        return _INPUT_USD_PER_MILLION, _OUTPUT_USD_PER_MILLION
+    name = model.strip().lower()
+    for known in sorted(_PRICES, key=len, reverse=True):
+        if name == known or name.startswith(f"{known}-20"):
+            return _PRICES[known]
+    return _INPUT_USD_PER_MILLION, _OUTPUT_USD_PER_MILLION
 
 
 def llm_timeout_s() -> float:
@@ -59,12 +104,17 @@ def llm_max_attempts() -> int:
     return attempts
 
 
-def approximate_cost_usd(input_tokens: int | None, output_tokens: int | None) -> Decimal | None:
+def approximate_cost_usd(
+    input_tokens: int | None,
+    output_tokens: int | None,
+    model: str | None = None,
+) -> Decimal | None:
     if input_tokens is None and output_tokens is None:
         return None
+    input_price, output_price = token_prices(model)
     cost = Decimal(0)
     if input_tokens is not None:
-        cost += Decimal(input_tokens) * _INPUT_USD_PER_MILLION / Decimal(1_000_000)
+        cost += Decimal(input_tokens) * input_price / Decimal(1_000_000)
     if output_tokens is not None:
-        cost += Decimal(output_tokens) * _OUTPUT_USD_PER_MILLION / Decimal(1_000_000)
+        cost += Decimal(output_tokens) * output_price / Decimal(1_000_000)
     return cost.quantize(Decimal("0.000001"))

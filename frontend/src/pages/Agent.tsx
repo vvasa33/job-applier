@@ -8,9 +8,11 @@ import {
   updateAgentSettings,
   type AgentActivity,
   type AgentStatus,
+  type AIStatus,
   type AutonomyLevel,
 } from "../api/agent";
-import { formatDateTime, label } from "../format";
+import { formatDateTime, formatUsd, label } from "../format";
+import { Chip, Notice, Skeleton, Timeline, TimelineItem, buttonClass, controlClass, primaryClass } from "../ui";
 
 const POLL_MS = 3000;
 
@@ -41,6 +43,15 @@ const AUTONOMY: { value: AutonomyLevel; title: string; detail: string }[] = [
 ];
 
 const INTERVALS = [1, 3, 6, 12, 24];
+
+const PURPOSES: Record<string, string> = {
+  semantic_matching: "Job matching",
+  job_analysis: "Job analysis",
+  question_classification: "Question classification",
+  question_suggestion: "Answer suggestions",
+  difficult_question: "Difficult questions",
+  resume_tailoring: "Resume tailoring",
+};
 
 export function Agent({ onOpen }: { onOpen: (path: string) => void }) {
   const [status, setStatus] = useState<AgentStatus | null>(null);
@@ -86,9 +97,14 @@ export function Agent({ onOpen }: { onOpen: (path: string) => void }) {
 
   if (status === null) {
     return loadError ? (
-      <p className="mt-10 text-[var(--muted)]">The agent status could not be loaded.</p>
+      <div className="mt-10">
+        <Notice tone="out">The agent status could not be loaded.</Notice>
+      </div>
     ) : (
-      <div className="mt-10 h-24 rounded-xl bg-[var(--line)]" aria-hidden="true" />
+      <div className="mt-10 grid gap-3">
+        <Skeleton className="h-16" />
+        <Skeleton className="h-24" />
+      </div>
     );
   }
 
@@ -101,18 +117,14 @@ export function Agent({ onOpen }: { onOpen: (path: string) => void }) {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="text-3xl font-medium tracking-tight">Agent</h1>
-            <p className="mt-2 flex items-center gap-2 text-[var(--muted)]">
-              <span
-                aria-hidden="true"
-                className={
-                  status.alive && running
-                    ? "h-2.5 w-2.5 rounded-full bg-[var(--accent)]"
-                    : "h-2.5 w-2.5 rounded-full border border-[var(--muted)]"
-                }
-              />
-              {status.alive ? PHASES[status.phase] ?? label(status.phase) : "Worker not running"}
-              {status.alive && !running && status.phase !== "stopped" ? " · stopping after the current step" : ""}
-            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Chip tone={status.alive && running ? "fit" : "neutral"}>
+                {status.alive ? PHASES[status.phase] ?? label(status.phase) : "Worker not running"}
+              </Chip>
+              {status.alive && !running && status.phase !== "stopped" ? (
+                <span className="text-sm text-[var(--muted)]">Stopping after the current step</span>
+              ) : null}
+            </div>
           </div>
           <div className="flex flex-wrap gap-2">
             {running ? (
@@ -144,16 +156,19 @@ export function Agent({ onOpen }: { onOpen: (path: string) => void }) {
             </button>
           </div>
         </div>
-        {!status.alive ? (
-          <p className="max-w-[70ch] rounded-xl border border-[var(--line)] bg-[var(--panel)] px-4 py-3 text-sm">
-            {status.message}
-          </p>
+        {!status.alive && status.message ? <Notice>{status.message}</Notice> : null}
+        {message ? <Notice tone="fit">{message}</Notice> : null}
+        {status.ai.exceeded ? (
+          <Notice tone="weak">
+            Today's AI budget is used up ({formatUsd(status.ai.spent_today_usd)} of {formatUsd(status.ai.budget_usd)}).
+            New jobs are matched without AI and no new resumes are tailored until midnight. Applications already in
+            progress continue.
+          </Notice>
         ) : null}
-        {message ? <p className="text-sm">{message}</p> : null}
       </section>
 
       {status.alive && status.current.step ? (
-        <section className="grid gap-1">
+        <section className="grid gap-2 rounded-xl border border-[var(--line)] bg-[var(--panel)] p-4">
           <h2 className="text-sm font-medium">Now</h2>
           <p>{status.current.step}</p>
           {status.current.job_id !== null ? (
@@ -267,49 +282,155 @@ export function Agent({ onOpen }: { onOpen: (path: string) => void }) {
         </div>
       </section>
 
+      <AICosts
+        ai={status.ai}
+        busy={busy}
+        onBudget={(amount) =>
+          void run(() => updateAgentSettings({ daily_llm_budget_usd: amount }), `Daily AI budget set to ${formatUsd(amount)}.`)
+        }
+      />
+
       <section className="grid gap-3">
         <h2 className="text-sm font-medium">Activity</h2>
         {activity.length === 0 ? (
           <p className="text-sm text-[var(--muted)]">Nothing has happened yet.</p>
         ) : (
-          <ol className="divide-y divide-[var(--line)] border-y border-[var(--line)]">
+          <Timeline>
             {activity.map((entry) => (
-              <li key={entry.id} className="grid gap-1 py-3 md:grid-cols-[11rem_1fr]">
-                <span className="text-sm text-[var(--muted)]">{formatDateTime(entry.created_at)}</span>
-                <span className="grid gap-1">
-                  <span className={entry.level === "info" ? "" : "font-medium"}>
-                    {entry.level === "error" ? "Error: " : entry.level === "warning" ? "Warning: " : ""}
-                    {entry.message}
-                  </span>
-                  <span className="flex flex-wrap gap-4 text-sm">
-                    {entry.job_id !== null ? (
-                      <button type="button" className="text-[var(--accent)]" onClick={() => onOpen(`/jobs/${entry.job_id}`)}>
-                        Open the job
-                      </button>
-                    ) : null}
-                    {entry.kind.endsWith("_gave_up") && entry.application_id !== null ? (
-                      <button
-                        type="button"
-                        className="text-[var(--accent)]"
-                        disabled={busy}
-                        onClick={() =>
-                          void run(
-                            () => retryApplication(entry.application_id as number),
-                            "The agent will try this application again.",
-                          )
-                        }
-                      >
-                        Try again
-                      </button>
-                    ) : null}
-                  </span>
+              <TimelineItem
+                key={entry.id}
+                time={formatDateTime(entry.created_at)}
+                title={entry.message}
+                tone={entry.level === "error" ? "out" : entry.level === "warning" ? "weak" : "neutral"}
+              >
+                <span className="flex flex-wrap gap-4 text-sm">
+                  {entry.job_id !== null ? (
+                    <button type="button" className="text-[var(--accent)]" onClick={() => onOpen(`/jobs/${entry.job_id}`)}>
+                      Open the job
+                    </button>
+                  ) : null}
+                  {entry.kind.endsWith("_gave_up") && entry.application_id !== null ? (
+                    <button
+                      type="button"
+                      className="text-[var(--accent)]"
+                      disabled={busy}
+                      onClick={() =>
+                        void run(
+                          () => retryApplication(entry.application_id as number),
+                          "The agent will try this application again.",
+                        )
+                      }
+                    >
+                      Try again
+                    </button>
+                  ) : null}
                 </span>
-              </li>
+              </TimelineItem>
             ))}
-          </ol>
+          </Timeline>
         )}
       </section>
     </div>
+  );
+}
+
+function AICosts({ ai, busy, onBudget }: { ai: AIStatus; busy: boolean; onBudget: (amount: number) => void }) {
+  const [draft, setDraft] = useState(ai.budget_usd.toFixed(2));
+  const amount = Number(draft);
+  const valid = draft.trim() !== "" && Number.isFinite(amount) && amount >= 0 && amount <= 1000;
+  const purposes = Object.entries(ai.by_purpose).sort((a, b) => b[1] - a[1]);
+
+  return (
+    <section className="grid gap-6 md:grid-cols-2">
+      <div className="grid content-start gap-3">
+        <h2 className="text-sm font-medium">AI spending</h2>
+        <p className="text-2xl font-medium tabular-nums tracking-tight">
+          {formatUsd(ai.spent_today_usd)} <span className="text-base text-[var(--muted)]">of {formatUsd(ai.budget_usd)} today</span>
+        </p>
+        <div
+          className="h-1.5 w-full overflow-hidden rounded-xl"
+          role="meter"
+          aria-label="AI budget used today"
+          aria-valuemin={0}
+          aria-valuemax={ai.budget_usd}
+          aria-valuenow={ai.spent_today_usd}
+        >
+          <div
+            className={ai.exceeded ? "h-full rounded-xl bg-[var(--weak)]" : "h-full rounded-xl bg-[var(--accent)]"}
+            style={{ width: `${ai.budget_usd <= 0 ? 100 : Math.min(100, (ai.spent_today_usd / ai.budget_usd) * 100)}%` }}
+          />
+        </div>
+        <form
+          className="flex flex-wrap items-end gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (valid) onBudget(Math.round(amount * 100) / 100);
+          }}
+        >
+          <label className="grid gap-1 text-sm">
+            <span className="text-[var(--muted)]">Daily budget in US dollars</span>
+            <input
+              className={`${controlClass} w-32 tabular-nums`}
+              inputMode="decimal"
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              aria-invalid={!valid}
+            />
+          </label>
+          <button type="submit" className={buttonClass} disabled={busy || !valid || amount === ai.budget_usd}>
+            Save budget
+          </button>
+        </form>
+        <p className="text-sm text-[var(--muted)]">
+          Costs are estimates from token counts. When the budget is reached, job matching falls back to the rule-based
+          filters and new resumes wait; a resume you tailor yourself and applications in progress are never stopped.
+        </p>
+        <p className="text-sm text-[var(--muted)]">
+          {ai.configured
+            ? `Classification uses ${ai.cheap_model}. Resume tailoring and difficult questions use ${ai.strong_model}.`
+            : "No model key is configured, so nothing is spent. Resumes are copied unchanged."}
+        </p>
+        {purposes.length > 0 ? (
+          <dl className="grid gap-1 text-sm">
+            {purposes.map(([purpose, cost]) => (
+              <div key={purpose} className="flex justify-between gap-4">
+                <dt className="text-[var(--muted)]">{PURPOSES[purpose] ?? label(purpose)}</dt>
+                <dd className="tabular-nums">{formatUsd(cost)}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : null}
+      </div>
+      <div className="grid content-start gap-3">
+        <h2 className="text-sm font-medium">By day</h2>
+        {ai.days.length === 0 ? (
+          <p className="text-sm text-[var(--muted)]">No AI calls yet.</p>
+        ) : (
+          <table className="w-full text-sm tabular-nums">
+            <thead className="text-left text-[var(--muted)]">
+              <tr>
+                <th className="py-1 font-normal">Day</th>
+                <th className="py-1 text-right font-normal">Spent</th>
+                <th className="py-1 text-right font-normal">Calls</th>
+                <th className="py-1 text-right font-normal">Reused</th>
+                <th className="py-1 text-right font-normal">Saved</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--line)] border-y border-[var(--line)]">
+              {ai.days.map((day) => (
+                <tr key={day.day}>
+                  <td className="py-2">{day.day}</td>
+                  <td className="py-2 text-right">{formatUsd(day.cost_usd)}</td>
+                  <td className="py-2 text-right">{day.calls}</td>
+                  <td className="py-2 text-right">{day.cached}</td>
+                  <td className="py-2 text-right">{formatUsd(day.saved_usd)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -334,8 +455,3 @@ function Stat({
   );
 }
 
-const controlClass = "h-10 rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3 text-sm text-[var(--fg)]";
-const buttonClass =
-  "inline-flex h-10 items-center rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3 text-sm disabled:opacity-50";
-const primaryClass =
-  "inline-flex h-10 items-center rounded-xl bg-[var(--accent)] px-3 text-sm text-[var(--accent-fg)] disabled:opacity-50";

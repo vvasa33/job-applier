@@ -37,6 +37,7 @@ export type JobDetail = JobSummary & {
     last_seen_at: string;
   }[];
   requirements: { kind: string; value: string; verified: boolean }[];
+  ai_cost_usd: number;
 };
 
 export type JobList = { total: number; companies: string[]; jobs: JobSummary[] };

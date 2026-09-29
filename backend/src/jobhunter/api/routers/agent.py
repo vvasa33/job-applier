@@ -8,8 +8,11 @@ from sqlalchemy.orm import Session
 
 from jobhunter.agent import store
 from jobhunter.agent.config import AgentConfigError, load_sources, user_settings
+from jobhunter.ai import ledger
 from jobhunter.api.deps import get_db
 from jobhunter.api.schemas import (
+    AIDayOut,
+    AIStatusOut,
     AgentActivityOut,
     AgentCurrentOut,
     AgentLimitsOut,
@@ -19,6 +22,8 @@ from jobhunter.api.schemas import (
 from jobhunter.db.models import AgentAttempt, Application, Job
 from jobhunter.domain.enums import AgentDesired, AgentPhase, ApplicationStatus, AutonomyLevel
 from jobhunter.domain.time import utcnow
+from jobhunter.llm.config import CHEAP, STRONG, api_key_from_environment, llm_model_for
+from jobhunter.llm.errors import LLMError
 
 router = APIRouter(prefix="/api/agent", tags=["agent"])
 
@@ -55,6 +60,9 @@ def discover_now(request: Request, db: Session = Depends(get_db)) -> AgentStatus
 def update_settings(body: AgentSettingsRequest, request: Request, db: Session = Depends(get_db)) -> AgentStatusResponse:
     row = _user_settings(db)
     changes: list[str] = []
+    if body.daily_llm_budget_usd is not None and body.daily_llm_budget_usd != row.daily_llm_budget_usd:
+        row.daily_llm_budget_usd = body.daily_llm_budget_usd
+        changes.append(f"daily AI budget ${body.daily_llm_budget_usd:.2f}")
     if body.autonomy_level is not None and body.autonomy_level != row.autonomy_level.value:
         row.autonomy_level = AutonomyLevel(body.autonomy_level)
         changes.append(f"autonomy {body.autonomy_level}")
@@ -178,6 +186,37 @@ def _status(request: Request, session: Session) -> AgentStatusResponse:
             apply_interval_seconds=settings.agent_apply_interval_seconds,
             max_failures=settings.agent_max_failures,
         ),
+        ai=_ai_status(session),
+    )
+
+
+def _ai_status(session: Session) -> AIStatusOut:
+    try:
+        api_key_from_environment()
+        configured = True
+    except LLMError:
+        configured = False
+    budget = ledger.budget_status(session)
+    return AIStatusOut(
+        configured=configured,
+        cheap_model=llm_model_for(CHEAP),
+        strong_model=llm_model_for(STRONG),
+        day=budget.day,
+        spent_today_usd=float(budget.spent),
+        budget_usd=float(budget.budget),
+        exceeded=budget.exceeded,
+        by_purpose={purpose: float(cost) for purpose, cost in ledger.by_purpose(session, budget.day).items()},
+        days=[
+            AIDayOut(
+                day=item.day,
+                cost_usd=float(item.cost),
+                saved_usd=float(item.saved),
+                calls=item.calls,
+                cached=item.cached,
+                refused=item.refused,
+            )
+            for item in ledger.daily(session)
+        ],
     )
 
 

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from jobhunter.agent import store
 from jobhunter.agent.config import load_sources
+from jobhunter.ai import AIService, CachedTailoringPlanner
 from jobhunter.agent.pipeline import AgentDeps, Pipeline, ResumeMaterial, TailorResult
 from jobhunter.browser.manager import BrowserManager
 from jobhunter.config import Settings
@@ -18,11 +19,10 @@ from jobhunter.db.models import Application
 from jobhunter.db.session import build_engine, session_factory
 from jobhunter.domain.enums import AgentDesired, AgentPhase
 from jobhunter.domain.time import utcnow
-from jobhunter.llm.client import client_from_environment
 from jobhunter.llm.errors import LLMError
 from jobhunter.matching.profiles import resume_profile_from_parsed
 from jobhunter.resume.master import MasterResumeError, validate_master
-from jobhunter.resume.tailoring import LLMTailoringPlanner, tailor_application_resume
+from jobhunter.resume.tailoring import tailor_application_resume
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,9 @@ class _NoPlanner:
         raise LLMError(self._reason)
 
 
-def default_deps(settings: Settings) -> AgentDeps:
+def default_deps(settings: Settings, sessions: Callable[[], Session]) -> AgentDeps:
+    ai = AIService(sessions)
+
     def resume(session: Session) -> ResumeMaterial | None:
         try:
             report = validate_master(session, settings)
@@ -52,10 +54,14 @@ def default_deps(settings: Settings) -> AgentDeps:
 
     def tailor(session: Session, application: Application) -> TailorResult:
         try:
-            planner = LLMTailoringPlanner(client_from_environment())
+            ai.client()
         except LLMError as exc:
             planner = _NoPlanner(f"no LLM is configured: {exc}")
+        else:
+            # The pipeline checked the budget before starting; a half-tailored application would be worse.
+            planner = CachedTailoringPlanner(ai, job_id=application.job_id, application_id=application.id, essential=True)
         report = tailor_application_resume(session, settings, application.id, planner)
+        ai.attach_version(application.id, report.version_id)
         return TailorResult(version_id=report.version_id, plan_error=report.plan_error)
 
     def browser() -> BrowserManager:
@@ -63,7 +69,14 @@ def default_deps(settings: Settings) -> AgentDeps:
         manager.open()
         return manager
 
-    return AgentDeps(settings=settings, sources=lambda: load_sources(settings), resume=resume, tailor=tailor, browser=browser)
+    return AgentDeps(
+        settings=settings,
+        sources=lambda: load_sources(settings),
+        resume=resume,
+        tailor=tailor,
+        browser=browser,
+        ai=ai,
+    )
 
 
 class AgentWorker:
@@ -87,7 +100,7 @@ class AgentWorker:
         self._heartbeat_seconds = heartbeat_seconds
         self.pid = os.getpid()
         self.pipeline = Pipeline(
-            deps or default_deps(settings),
+            deps or default_deps(settings, sessions),
             sessions,
             report=self._report,
             cancel=self._should_pause,

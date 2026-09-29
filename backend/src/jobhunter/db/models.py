@@ -391,3 +391,55 @@ class UserSettings(Base):
     daily_llm_budget_usd: Mapped[Decimal] = mapped_column(Numeric(8, 2), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+
+class AIUsage(Base):
+    """One estimated model charge, cache hit, or budget refusal. Costs are estimates, not an invoice."""
+
+    __tablename__ = "ai_usage"
+    __table_args__ = (
+        Index("ix_ai_usage_day", "day"),
+        Index("ix_ai_usage_job", "job_id"),
+        Index("ix_ai_usage_application", "application_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    day: Mapped[str] = mapped_column(String(10), nullable=False)
+    purpose: Mapped[str] = mapped_column(String(40), nullable=False)
+    tier: Mapped[str] = mapped_column(String(16), nullable=False)
+    model: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    essential: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cost_usd: Mapped[Decimal] = mapped_column(Numeric(12, 6), default=Decimal(0), nullable=False)
+    saved_usd: Mapped[Decimal] = mapped_column(Numeric(12, 6), default=Decimal(0), nullable=False)
+    cache_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    job_id: Mapped[int | None] = mapped_column(ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True)
+    application_id: Mapped[int | None] = mapped_column(
+        ForeignKey("applications.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    resume_version_id: Mapped[int | None] = mapped_column(
+        ForeignKey("resume_versions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    detail: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+
+class AICache(Base):
+    """A validated model result, keyed by a hash of every input that shaped the prompt."""
+
+    __tablename__ = "ai_cache"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    cache_key: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    purpose: Mapped[str] = mapped_column(String(40), nullable=False)
+    prompt_version: Mapped[str] = mapped_column(String(20), nullable=False)
+    model: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    output: Mapped[dict] = mapped_column(JSON, nullable=False)
+    cost_usd: Mapped[Decimal] = mapped_column(Numeric(12, 6), default=Decimal(0), nullable=False)
+    hits: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    last_used_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)

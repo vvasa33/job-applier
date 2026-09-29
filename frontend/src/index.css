@@ -15,6 +15,12 @@
   --panel: #fbfbfa;
   --accent: #1b6b43;
   --accent-fg: #f3faf6;
+  --fit: #1b6b43;
+  --fit-bg: #e5f3eb;
+  --weak: #7a5314;
+  --weak-bg: #f8f1de;
+  --out: #8d3d3a;
+  --out-bg: #f8e8e6;
   --shadow: 0 16px 40px rgb(28 33 29 / 0.06);
 }
 
@@ -27,6 +33,12 @@
   --panel: #1c1f1c;
   --accent: #6fbf90;
   --accent-fg: #07140d;
+  --fit: #8fd4ab;
+  --fit-bg: #1a3326;
+  --weak: #e2c07a;
+  --weak-bg: #332a16;
+  --out: #f0b0ab;
+  --out-bg: #3a2220;
   --shadow: 0 16px 40px rgb(0 0 0 / 0.28);
 }
 
@@ -43,10 +55,48 @@ body {
   font-family: var(--font-sans);
 }
 
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+button:active:not(:disabled),
+a:active {
+  transform: translateY(1px);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .enter {
+    animation: enter 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .skeleton {
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+}
+
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
     transition: none !important;
+    animation: none !important;
   }
 }

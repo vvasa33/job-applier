@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -59,6 +60,7 @@ class JobDetail(JobSummary):
     possible_duplicate_of: int | None
     source_records: list[JobSourceOut]
     requirements: list[RequirementOut]
+    ai_cost_usd: float = 0
 
 
 class JobListResponse(BaseModel):
@@ -101,6 +103,7 @@ class ResumeVersionOut(BaseModel):
     pdf_path: str | None
     diff_path: str | None
     created_at: datetime
+    ai_cost_usd: float = 0
 
 
 class ApplicationEventOut(BaseModel):
@@ -149,6 +152,7 @@ class ApplicationResponse(BaseModel):
     resume_queued: bool = False
     submit_attempted: bool = False
     agent_owns_browser: bool = False
+    ai_cost_usd: float = 0
 
 
 class ReviewQueueItem(BaseModel):
@@ -229,6 +233,27 @@ class AgentCurrentOut(BaseModel):
     step: str | None
 
 
+class AIDayOut(BaseModel):
+    day: str
+    cost_usd: float
+    saved_usd: float
+    calls: int
+    cached: int
+    refused: int
+
+
+class AIStatusOut(BaseModel):
+    configured: bool
+    cheap_model: str
+    strong_model: str
+    day: str
+    spent_today_usd: float
+    budget_usd: float
+    exceeded: bool
+    by_purpose: dict[str, float]
+    days: list[AIDayOut]
+
+
 class AgentStatusResponse(BaseModel):
     desired: str
     phase: str
@@ -249,11 +274,13 @@ class AgentStatusResponse(BaseModel):
     sources_configured: int
     sources_error: str | None
     limits: AgentLimitsOut
+    ai: AIStatusOut
 
 
 class AgentSettingsRequest(BaseModel):
     autonomy_level: Literal["observe", "assist", "supervised"] | None = None
     discovery_interval_hours: int | None = Field(default=None, ge=1, le=168)
+    daily_llm_budget_usd: Decimal | None = Field(default=None, ge=0, le=1000, decimal_places=2)
 
 
 class AgentActivityOut(BaseModel):

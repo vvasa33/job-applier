@@ -1,12 +1,16 @@
 import { useEffect, useState } from "react";
 
-import { fetchDashboard, type Dashboard as DashboardData, type JobSummary } from "../api/jobs";
-import { formatDate, label, place, workplaceLabel } from "../format";
+import { fetchReviewQueue, type ReviewItem } from "../api/applications";
+import { fetchDashboard, type Dashboard as DashboardData } from "../api/jobs";
+import { formatDateTime, label } from "../format";
+import { JobCard, Notice, Skeleton } from "../ui";
 
 export function Dashboard({ onOpen }: { onOpen: (path: string) => void }) {
+  const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<{ phase: "loading" } | { phase: "error" } | { phase: "ready"; data: DashboardData }>(
     { phase: "loading" },
   );
+  const [queue, setQueue] = useState<ReviewItem[] | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -17,12 +21,34 @@ export function Dashboard({ onOpen }: { onOpen: (path: string) => void }) {
       .catch(() => {
         if (!controller.signal.aborted) setState({ phase: "error" });
       });
+    void fetchReviewQueue(controller.signal)
+      .then((items) => {
+        if (!controller.signal.aborted) setQueue(items);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setQueue(null);
+      });
     return () => controller.abort();
-  }, []);
+  }, [attempt]);
 
-  if (state.phase === "loading") return <Skeleton />;
+  if (state.phase === "loading") {
+    return (
+      <div className="mt-10 grid gap-3">
+        <Skeleton className="h-8 w-40" />
+        <Skeleton className="h-24" />
+        <Skeleton className="h-36" />
+      </div>
+    );
+  }
   if (state.phase === "error") {
-    return <p className="mt-10 text-[var(--muted)]">The job list could not be loaded. Check that the local API is running.</p>;
+    return (
+      <div className="mt-10 grid gap-3">
+        <Notice tone="out">The job list could not be loaded. Check that the local API is running.</Notice>
+        <button type="button" className="justify-self-start text-sm text-[var(--accent)]" onClick={() => setAttempt((n) => n + 1)}>
+          Try again
+        </button>
+      </div>
+    );
   }
 
   const data = state.data;
@@ -48,19 +74,28 @@ export function Dashboard({ onOpen }: { onOpen: (path: string) => void }) {
 
       <section className="mt-12">
         <div className="flex items-baseline justify-between gap-4">
-          <h2 className="text-lg font-medium">Recently discovered</h2>
-          <button type="button" className="text-sm text-[var(--accent)]" onClick={() => onOpen("/jobs")}>
-            All jobs
+          <h2 className="text-lg font-medium">Waiting for you</h2>
+          <button type="button" className="text-sm text-[var(--accent)]" onClick={() => onOpen("/review")}>
+            Review
           </button>
         </div>
-        {data.recent.length === 0 ? (
-          <p className="mt-4 text-[var(--muted)]">No jobs stored yet. A discovery run will fill this list.</p>
+        {queue === null ? (
+          <p className="mt-4 text-sm text-[var(--muted)]">The review queue could not be loaded.</p>
+        ) : queue.length === 0 ? (
+          <p className="mt-4 text-[var(--muted)]">Nothing is waiting on you.</p>
         ) : (
-          <ul className="mt-4 divide-y divide-[var(--line)] border-y border-[var(--line)]">
-            {data.recent.map((job) => (
-              <li key={job.id}>
-                <button type="button" className="w-full py-3 text-left" onClick={() => onOpen(`/jobs/${job.id}`)}>
-                  <JobLine job={job} />
+          <ul className="mt-4 grid gap-3">
+            {queue.map((item) => (
+              <li key={item.application_id}>
+                <button
+                  type="button"
+                  className="grid w-full gap-1 rounded-xl border border-[var(--line)] bg-[var(--panel)] p-4 text-left"
+                  onClick={() => onOpen("/review")}
+                >
+                  <span className="font-medium">{item.title}</span>
+                  <span className="text-sm text-[var(--muted)]">{item.company}</span>
+                  <span className="text-sm">{queueLabel(item)}</span>
+                  <span className="text-xs text-[var(--muted)]">Waiting since {formatDateTime(item.waiting_since)}</span>
                 </button>
               </li>
             ))}
@@ -69,41 +104,73 @@ export function Dashboard({ onOpen }: { onOpen: (path: string) => void }) {
       </section>
 
       <section className="mt-12">
-        <h2 className="text-lg font-medium">By status</h2>
-        <ul className="mt-4 grid gap-2 sm:grid-cols-2">
-          {Object.entries(data.by_status)
-            .filter(([, count]) => count > 0)
-            .map(([status, count]) => (
-              <li key={status} className="flex items-center justify-between rounded-xl border border-[var(--line)] px-4 py-3">
-                <span className="capitalize">{label(status)}</span>
-                <span className="font-mono text-sm">{count}</span>
+        <div className="flex items-baseline justify-between gap-4">
+          <h2 className="text-lg font-medium">Recently discovered</h2>
+          <button type="button" className="text-sm text-[var(--accent)]" onClick={() => onOpen("/jobs")}>
+            All jobs
+          </button>
+        </div>
+        {data.recent.length === 0 ? (
+          <p className="mt-4 text-[var(--muted)]">No jobs stored yet. A discovery run will fill this list.</p>
+        ) : (
+          <ul className="mt-4 grid gap-3">
+            {data.recent.map((job) => (
+              <li key={job.id}>
+                <JobCard job={job} onOpen={onOpen} />
               </li>
             ))}
-        </ul>
-        {Object.values(data.by_status).every((count) => count === 0) ? (
-          <p className="mt-4 text-[var(--muted)]">Nothing to group until jobs are stored.</p>
-        ) : null}
+          </ul>
+        )}
+      </section>
+
+      <section className="mt-12">
+        <h2 className="text-lg font-medium">By status</h2>
+        <StatusMix counts={data.by_status} total={data.job_count} onOpen={onOpen} />
       </section>
     </div>
   );
 }
 
-export function JobLine({ job }: { job: JobSummary }) {
-  return (
-    <span className="grid gap-1">
-      <span className="font-medium">{job.title}</span>
-      <span className="text-sm text-[var(--muted)]">
-        {job.company} · {place(job)} · {workplaceLabel(job.workplace)} · {formatDate(job.first_seen_at)}
-      </span>
-    </span>
-  );
+function queueLabel(item: ReviewItem): string {
+  if (item.resume_queued) return "Continuing in the agent's browser";
+  if (item.pause_kind === "confirm_submit") return "Ready to submit";
+  if (item.pause_kind === "verify_submit") return "Check whether it was submitted";
+  return item.question_label || item.waiting_reason || "Waiting for an answer";
 }
 
-function Skeleton() {
+function StatusMix({
+  counts,
+  total,
+  onOpen,
+}: {
+  counts: Record<string, number>;
+  total: number;
+  onOpen: (path: string) => void;
+}) {
+  const rows = Object.entries(counts).filter(([, count]) => count > 0);
+  if (rows.length === 0 || total === 0) {
+    return <p className="mt-4 text-[var(--muted)]">Nothing to group until jobs are stored.</p>;
+  }
   return (
-    <div className="mt-10 space-y-3" aria-hidden="true">
-      <div className="h-8 w-40 rounded-xl bg-[var(--line)]" />
-      <div className="h-20 rounded-xl bg-[var(--line)]" />
-    </div>
+    <ul className="mt-4 grid gap-3">
+      {rows.map(([status, count]) => (
+        <li key={status}>
+          <button
+            type="button"
+            className="grid w-full gap-2 text-left"
+            onClick={() => onOpen(`/jobs?status=${encodeURIComponent(status)}`)}
+          >
+            <span className="flex items-baseline justify-between gap-4 text-sm">
+              <span className="capitalize">{label(status)}</span>
+              <span className="tabular-nums text-[var(--muted)]">{count}</span>
+            </span>
+            <span
+              className="block h-1 rounded-xl bg-[var(--accent)]"
+              style={{ width: `${Math.max(8, (count / total) * 100)}%` }}
+            />
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }

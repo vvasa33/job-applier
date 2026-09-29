@@ -5,6 +5,7 @@ export type ResumeVersion = {
   pdf_path: string | null;
   diff_path: string | null;
   created_at: string;
+  ai_cost_usd: number;
 };
 
 export type ApplicationEvent = {
@@ -78,6 +79,7 @@ export type ApplicationDetail = {
   resume_queued: boolean;
   submit_attempted: boolean;
   agent_owns_browser: boolean;
+  ai_cost_usd: number;
 };
 
 export function reviewOutcome(application: ApplicationDetail): string {

@@ -23,6 +23,7 @@ from jobhunter.api.schemas import (
 )
 from jobhunter.agent import store
 from jobhunter.agent.config import AgentConfigError, applicant_for, submit_policy
+from jobhunter.ai import ledger
 from jobhunter.apply.decisions import ApplicantData, DecisionSource, KnownFact
 from jobhunter.apply.runner import (
     page_context,
@@ -330,8 +331,8 @@ def _response(session: Session, application: Application, screenshot_dir: Path) 
         status_changed_at=application.status_changed_at,
         started_at=application.started_at,
         submitted_at=application.submitted_at,
-        resume_version=None if current is None else _version(current),
-        resume_versions=[_version(version) for version in versions],
+        resume_version=None if current is None else _version(session, current),
+        resume_versions=[_version(session, version) for version in versions],
         history=[_event(event) for event in events],
         pending_fields=[_pending(field) for field in pending_fields(session, application)],
         company=application.job.company_name,
@@ -344,6 +345,7 @@ def _response(session: Session, application: Application, screenshot_dir: Path) 
         resume_queued=context["resume_queued"],
         submit_attempted=context["submit_attempted"],
         agent_owns_browser=_agent_owns_browser(session),
+        ai_cost_usd=float(ledger.total_for(session, application_id=application.id)),
     )
 
 
@@ -383,7 +385,7 @@ def _pending(field: dict) -> PendingFieldOut:
     )
 
 
-def _version(version: ResumeVersion) -> ResumeVersionOut:
+def _version(session: Session, version: ResumeVersion) -> ResumeVersionOut:
     return ResumeVersionOut(
         id=version.id,
         sha256=version.sha256,
@@ -391,6 +393,7 @@ def _version(version: ResumeVersion) -> ResumeVersionOut:
         pdf_path=version.pdf_path,
         diff_path=version.diff_path,
         created_at=version.created_at,
+        ai_cost_usd=float(ledger.total_for(session, resume_version_id=version.id)),
     )
 
 

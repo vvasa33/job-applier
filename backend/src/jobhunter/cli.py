@@ -6,14 +6,15 @@ import sys
 import time
 from pathlib import Path
 
+from jobhunter.ai import AIService, CachedTailoringPlanner
 from jobhunter.config import get_settings
 from jobhunter.db.migrate import init_database
+from jobhunter.db.models import Application
 from jobhunter.db.session import build_engine, session_factory
-from jobhunter.llm.client import client_from_environment
 from jobhunter.llm.errors import LLMError
 from jobhunter.resume.application import prepare_application_resume
 from jobhunter.resume.master import MasterResumeError, compile_master, validate_master
-from jobhunter.resume.tailoring import LLMTailoringPlanner, tailor_application_resume
+from jobhunter.resume.tailoring import tailor_application_resume
 
 
 def _repo_root() -> Path:
@@ -156,13 +157,27 @@ def run_resume_prepare(application_id: int) -> None:
 
 
 def run_resume_tailor(application_id: int) -> None:
+    settings = get_settings()
+    init_database(settings)
+    engine = build_engine(settings)
+    sessions = session_factory(engine)
+    ai = AIService(sessions)
     try:
-        planner = LLMTailoringPlanner(client_from_environment())
+        ai.client()
     except LLMError as exc:
+        engine.dispose()
         raise SystemExit(str(exc)) from exc
-    settings, engine, session = _resume_session()
+    session = sessions()
     try:
+        application = session.get(Application, application_id)
+        planner = CachedTailoringPlanner(
+            ai,
+            job_id=application.job_id if application is not None else None,
+            application_id=application_id if application is not None else None,
+            essential=True,
+        )
         report = tailor_application_resume(session, settings, application_id, planner)
+        ai.attach_version(application_id, report.version_id)
     except MasterResumeError as exc:
         raise SystemExit(str(exc)) from exc
     finally:

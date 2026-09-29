@@ -1,12 +1,14 @@
 import { Moon, Sun } from "@phosphor-icons/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
+import { fetchReviewQueue } from "./api/applications";
 import { EMPTY_FILTERS, type JobFilters } from "./api/jobs";
 import { Agent } from "./pages/Agent";
 import { Dashboard } from "./pages/Dashboard";
 import { JobDetail } from "./pages/JobDetail";
 import { Jobs } from "./pages/Jobs";
 import { ReviewQueue } from "./pages/ReviewQueue";
+import { Notice } from "./ui";
 
 function readDark(): boolean {
   return document.documentElement.classList.contains("dark");
@@ -57,40 +59,80 @@ export function App() {
     setThemeDark(next);
   }, [themeDark]);
 
+  const [waiting, setWaiting] = useState<number | null>(null);
+
+  useEffect(() => {
+    let stop = false;
+    async function load() {
+      try {
+        const queue = await fetchReviewQueue();
+        if (!stop) setWaiting(queue.length);
+      } catch {
+        if (!stop) setWaiting(null);
+      }
+    }
+    void load();
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void load();
+    }, 5000);
+    return () => {
+      stop = true;
+      window.clearInterval(timer);
+    };
+  }, [path]);
+
   const url = useMemo(() => new URL(path, "http://localhost"), [path]);
   const jobId = url.pathname.match(/^\/jobs\/(\d+)$/)?.[1];
   const filters = url.pathname === "/jobs" ? readFilters(url.search) : EMPTY_FILTERS;
+  const reviewCount = waiting ?? 0;
 
   return (
-    <div className="mx-auto min-h-[100dvh] max-w-5xl px-6 py-6 md:px-10">
-      <header className="flex h-14 items-center justify-between gap-4 border-b border-[var(--line)]">
-        <nav className="flex items-center gap-5 text-sm">
-          <button type="button" className="font-medium tracking-tight" onClick={() => open("/")}>
-            Job Hunter
-          </button>
-          <button type="button" className={navClass(url.pathname === "/")} onClick={() => open("/")}>
-            Dashboard
-          </button>
-          <button type="button" className={navClass(url.pathname.startsWith("/jobs"))} onClick={() => open("/jobs")}>
-            Jobs
-          </button>
-          <button type="button" className={navClass(url.pathname.startsWith("/review"))} onClick={() => open("/review")}>
-            Review
-          </button>
-          <button type="button" className={navClass(url.pathname === "/agent")} onClick={() => open("/agent")}>
-            Agent
-          </button>
-        </nav>
+    <div className="mx-auto min-h-[100dvh] max-w-5xl px-4 py-4 md:px-10 md:py-6">
+      <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-[var(--line)] py-2 md:h-16 md:flex-nowrap md:py-0">
+        <button type="button" className="shrink-0 font-medium tracking-tight" onClick={() => open("/")}>
+          Job Hunter
+        </button>
         <button
           type="button"
           onClick={toggleTheme}
-          className="inline-flex h-10 items-center gap-2 rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3 text-sm"
+          aria-label={themeDark ? "Switch to light theme" : "Switch to dark theme"}
+          className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3 text-sm md:order-last"
         >
           {themeDark ? <Sun size={18} /> : <Moon size={18} />}
-          {themeDark ? "Light" : "Dark"}
+          <span className="hidden sm:inline">{themeDark ? "Light" : "Dark"}</span>
         </button>
+        <nav className="flex w-full min-w-0 items-center gap-1 overflow-x-auto text-sm md:w-auto" aria-label="Primary">
+          <NavLink active={url.pathname === "/"} onClick={() => open("/")}>
+            Dashboard
+          </NavLink>
+          <NavLink active={url.pathname.startsWith("/jobs")} onClick={() => open("/jobs")}>
+            Jobs
+          </NavLink>
+          <NavLink active={url.pathname.startsWith("/review")} onClick={() => open("/review")}>
+            Review
+            {reviewCount > 0 ? (
+              <span className="ml-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-xl bg-[var(--weak-bg)] px-1 text-xs text-[var(--weak)]">
+                {reviewCount}
+              </span>
+            ) : null}
+          </NavLink>
+          <NavLink active={url.pathname === "/agent"} onClick={() => open("/agent")}>
+            Agent
+          </NavLink>
+        </nav>
       </header>
-      <main>
+      {reviewCount > 0 && url.pathname !== "/review" ? (
+        <div className="mt-4">
+          <Notice tone="weak">
+            <button type="button" className="text-left" onClick={() => open("/review")}>
+              {reviewCount === 1
+                ? "1 application is waiting for you."
+                : `${reviewCount} applications are waiting for you.`}
+            </button>
+          </Notice>
+        </div>
+      ) : null}
+      <main className="enter">
         {url.pathname === "/" ? <Dashboard onOpen={open} /> : null}
         {url.pathname === "/jobs" ? (
           <Jobs filters={filters} onChange={(next) => open(writeFilters(next))} onOpen={open} />
@@ -113,6 +155,27 @@ export function App() {
 
 const KNOWN_PATHS = new Set(["/", "/jobs", "/review", "/agent"]);
 
-function navClass(active: boolean): string {
-  return active ? "text-[var(--fg)]" : "text-[var(--muted)]";
+function NavLink({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-current={active ? "page" : undefined}
+      className={
+        active
+          ? "inline-flex h-10 shrink-0 items-center rounded-xl bg-[var(--panel)] px-2.5 text-[var(--fg)] md:px-3"
+          : "inline-flex h-10 shrink-0 items-center rounded-xl px-2.5 text-[var(--muted)] md:px-3"
+      }
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
 }

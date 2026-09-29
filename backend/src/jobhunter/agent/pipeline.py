@@ -8,6 +8,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from jobhunter.agent import store
+from jobhunter.ai import AIService, BudgetExceeded, CachedSemanticMatcher
+from jobhunter.ai.ledger import local_day
 from jobhunter.agent.config import AgentConfigError, applicant_for, load_sources, submit_policy, user_settings
 from jobhunter.applications import change_status, open_application
 from jobhunter.apply.runner import pause_application, recover_interrupted_submit, resume_ready, run_page
@@ -30,6 +32,7 @@ from jobhunter.domain.time import utcnow
 from jobhunter.ingestion.ports import JobSource
 from jobhunter.ingestion.registry import SourceRegistry
 from jobhunter.ingestion.service import IngestionService
+from jobhunter.llm.errors import LLMError
 from jobhunter.matching.profiles import ResumeProfile
 from jobhunter.matching.service import match_job
 from jobhunter.resume.tailoring import job_profile
@@ -68,6 +71,7 @@ class AgentDeps:
     tailor: Callable[[Session, Application], TailorResult]
     browser: Callable[[], BrowserManager]
     now: Callable[[], datetime] = field(default=utcnow)
+    ai: AIService | None = None
 
 
 Report = Callable[..., None]
@@ -317,6 +321,9 @@ class Pipeline:
             )
         if chosen is None:
             return False
+        if self.deps.ai is not None and not self.deps.ai.can_spend("resume_tailoring"):
+            self._budget_reached("New resumes are not being tailored until the budget resets.")
+            return False
 
         def work(session: Session) -> None:
             application = session.get(Application, chosen)
@@ -461,6 +468,7 @@ class Pipeline:
                 select(Job.id).where(Job.status == JobStatus.discovered).order_by(Job.first_seen_at, Job.id)
             ).all()
         counts = {"shortlisted": 0, "scored_low": 0, "filtered_out": 0}
+        semantic = self.deps.ai is not None and self.deps.ai.configured()
         for job_id in job_ids:
             if self._cancel():
                 return
@@ -471,7 +479,18 @@ class Pipeline:
                 if job is None or job.application is not None:
                     continue
                 try:
-                    match = match_job(job_profile(job), material.profile)
+                    profile = job_profile(job)
+                    match = match_job(profile, material.profile)
+                    if semantic and match.recommendation != "skip":
+                        try:
+                            match = match_job(
+                                profile, material.profile, CachedSemanticMatcher(self.deps.ai, job_id=job_id)
+                            )
+                        except BudgetExceeded:
+                            semantic = False
+                            self._budget_reached("New jobs are matched without semantic analysis until it resets.")
+                        except LLMError:
+                            pass
                 except Exception as exc:
                     session.rollback()
                     store.record_failure(session, "triage", job_id, str(exc), max_failures=self.settings.agent_max_failures)
@@ -499,6 +518,26 @@ class Pipeline:
             )
             session.commit()
         self._select()
+
+    def _budget_reached(self, consequence: str) -> None:
+        """Tell the user once per local day. Applications already under way are not affected."""
+
+        with self._sessions() as session:
+            last = store.last_activity(session, "ai_budget_reached")
+            if last is not None and local_day(store.aware(last.created_at)) == local_day(self.deps.now()):
+                return
+            status = self.deps.ai.budget()
+            store.log(
+                session,
+                "warning",
+                "ai_budget_reached",
+                f"Today's AI budget is used up (${status.spent:.2f} of ${status.budget:.2f}). {consequence} "
+                "Applications already in progress continue.",
+                spent_usd=str(status.spent),
+                budget_usd=str(status.budget),
+                day=status.day,
+            )
+            session.commit()
 
     def _select(self) -> None:
         with self._sessions() as session:

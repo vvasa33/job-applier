@@ -7,6 +7,12 @@ export function formatDate(value: string | null): string {
   return DATE.format(parsed);
 }
 
+const USD = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 4 });
+
+export function formatUsd(value: number): string {
+  return USD.format(value);
+}
+
 export function label(value: string): string {
   return value.replaceAll("_", " ");
 }

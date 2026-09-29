@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from jobhunter.ai import ledger
 from jobhunter.api.deps import get_db
 from jobhunter.api.jobs_query import WORKPLACES, companies, dashboard_counts, job_detail, list_jobs, workplace_of
 from jobhunter.api.schemas import DashboardResponse, JobDetail, JobListResponse, JobSourceOut, JobSummary, RequirementOut
@@ -93,6 +94,7 @@ def read_job(job_id: int, db: Session = Depends(get_db)) -> JobDetail:
             RequirementOut(kind=item.kind.value, value=item.value, verified=item.verified)
             for item in job.requirements
         ],
+        ai_cost_usd=float(ledger.total_for(db, job_id=job.id)),
     )
 
 

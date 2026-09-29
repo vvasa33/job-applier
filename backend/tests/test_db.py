@@ -37,5 +37,7 @@ def test_core_tables_are_registered() -> None:
         "agent_state",
         "agent_activity",
         "agent_attempts",
+        "ai_cache",
+        "ai_usage",
         "user_settings",
     }

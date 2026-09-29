@@ -8,7 +8,7 @@ from typing import TypeVar
 
 from pydantic import BaseModel, ValidationError
 
-from jobhunter.llm.config import approximate_cost_usd, llm_max_attempts, llm_model, llm_timeout_s
+from jobhunter.llm.config import approximate_cost_usd, llm_max_attempts, llm_model_for, llm_timeout_s, tier_for
 from jobhunter.llm.errors import LLMError, ProviderError
 from jobhunter.llm.http import http_provider_from_environment
 from jobhunter.llm.profiles import job_text, resume_text
@@ -64,11 +64,16 @@ class LLMClient:
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         self._provider = provider
-        self._model = model if model is not None else llm_model()
+        self._model = model
         self._timeout_s = timeout_s if timeout_s is not None else llm_timeout_s()
         self._max_attempts = max_attempts if max_attempts is not None else llm_max_attempts()
         self._sleep = sleep
         self.usage: list[UsageRecord] = []
+
+    def model_for(self, purpose: str) -> str:
+        """An explicit model applies to every purpose. Otherwise each purpose uses its tier's model."""
+
+        return self._model if self._model is not None else llm_model_for(tier_for(purpose))
 
     def analyze_job(self, job: JobProfile) -> LLMResult[JobAnalysis]:
         return self._call(
@@ -113,9 +118,10 @@ class LLMClient:
         field_type: str,
         job_title: str,
         context: str,
+        difficult: bool = False,
     ) -> LLMResult[AnswerSuggestion]:
         return self._call(
-            purpose="question_suggestion",
+            purpose="difficult_question" if difficult else "question_suggestion",
             schema=AnswerSuggestion,
             user=(
                 f"Field label: {field_label}\n"
@@ -130,7 +136,7 @@ class LLMClient:
         shape = json.dumps(schema.model_json_schema(), separators=(",", ":"))
         request = CompletionRequest(
             purpose=purpose,
-            model=self._model,
+            model=self.model_for(purpose),
             system=system,
             user=f"{user}\n\nJSON schema:\n{shape}",
             json_schema_name=schema.__name__,
@@ -166,7 +172,7 @@ class LLMClient:
         raise LLMError(f"{request.purpose} failed") from last
 
     def _record(self, request, response, started: float, *, attempts: int, status: str) -> UsageRecord:
-        cost = approximate_cost_usd(response.input_tokens, response.output_tokens)
+        cost = approximate_cost_usd(response.input_tokens, response.output_tokens, response.model or request.model)
         usage = UsageRecord(
             purpose=request.purpose,
             provider=response.provider,

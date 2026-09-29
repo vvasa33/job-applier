@@ -10,6 +10,7 @@ import {
   type ReviewItem,
 } from "../api/applications";
 import { formatDateTime } from "../format";
+import { Chip, Notice, Skeleton, type Tone } from "../ui";
 import { Intervention } from "./Intervention";
 
 const POLL_MS = 5000;
@@ -19,6 +20,12 @@ function pauseLabel(item: ReviewItem): string {
   if (item.pause_kind === "confirm_submit") return "Ready to submit";
   if (item.pause_kind === "verify_submit") return "Check whether it was submitted";
   return item.question_label || item.waiting_reason || "Waiting for an answer";
+}
+
+function pauseTone(item: ReviewItem): Tone {
+  if (item.pause_kind === "confirm_submit") return "fit";
+  if (item.pause_kind === "verify_submit" || item.pause_kind === "needs_look") return "out";
+  return "weak";
 }
 
 export function ReviewQueue({ onOpen }: { onOpen: (path: string) => void }) {
@@ -114,10 +121,19 @@ export function ReviewQueue({ onOpen }: { onOpen: (path: string) => void }) {
   }
 
   if (loadError && items === null) {
-    return <p className="mt-10 text-[var(--muted)]">The review queue could not be loaded.</p>;
+    return (
+      <div className="mt-10">
+        <Notice tone="out">The review queue could not be loaded.</Notice>
+      </div>
+    );
   }
   if (items === null) {
-    return <div className="mt-10 h-24 rounded-xl bg-[var(--line)]" aria-hidden="true" />;
+    return (
+      <div className="mt-10 grid gap-3 md:grid-cols-[18rem_1fr]">
+        <Skeleton className="h-40" />
+        <Skeleton className="h-64" />
+      </div>
+    );
   }
 
   return (
@@ -130,29 +146,31 @@ export function ReviewQueue({ onOpen }: { onOpen: (path: string) => void }) {
       {items.length === 0 ? (
         <p className="mt-8 text-[var(--muted)]">No applications are waiting for an answer.</p>
       ) : (
-        <div className="mt-8 grid gap-8 lg:grid-cols-[18rem_1fr]">
-          <ul className="divide-y divide-[var(--line)] border-y border-[var(--line)]">
+        <div className="mt-8 grid items-start gap-6 lg:grid-cols-[18rem_1fr]">
+          <ul className="grid gap-2" aria-label="Applications waiting">
             {items.map((item) => {
               const selected = item.application_id === selectedId;
               return (
                 <li key={item.application_id}>
                   <button
                     type="button"
-                    className={selected ? "w-full bg-[var(--panel)] py-3 text-left" : "w-full py-3 text-left"}
+                    className={
+                      selected
+                        ? "grid w-full gap-2 rounded-xl border border-[var(--accent)] bg-[var(--panel)] p-3 text-left"
+                        : "grid w-full gap-2 rounded-xl border border-[var(--line)] p-3 text-left"
+                    }
                     aria-current={selected ? "true" : undefined}
                     onClick={() => {
                       setMessage(null);
                       setSelectedId(item.application_id);
                     }}
                   >
-                    <span className="grid gap-1">
-                      <span className="font-medium">{item.title}</span>
-                      <span className="text-sm text-[var(--muted)]">{item.company}</span>
-                      <span className="text-sm">
-                        {pauseLabel(item)}
-                        {item.question_count > 1 ? ` · ${item.question_count} questions` : ""}
-                      </span>
-                      <span className="text-sm text-[var(--muted)]">{formatDateTime(item.waiting_since)}</span>
+                    <span className="font-medium">{item.title}</span>
+                    <span className="text-sm text-[var(--muted)]">{item.company}</span>
+                    <Chip tone={pauseTone(item)}>{pauseLabel(item)}</Chip>
+                    <span className="text-xs text-[var(--muted)]">
+                      {formatDateTime(item.waiting_since)}
+                      {item.question_count > 1 ? ` · ${item.question_count} questions` : ""}
                     </span>
                   </button>
                 </li>

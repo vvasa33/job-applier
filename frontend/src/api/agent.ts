@@ -32,6 +32,26 @@ export type AgentStatus = {
     apply_interval_seconds: number;
     max_failures: number;
   };
+  ai: AIStatus;
+};
+
+export type AIStatus = {
+  configured: boolean;
+  cheap_model: string;
+  strong_model: string;
+  day: string;
+  spent_today_usd: number;
+  budget_usd: number;
+  exceeded: boolean;
+  by_purpose: Record<string, number>;
+  days: {
+    day: string;
+    cost_usd: number;
+    saved_usd: number;
+    calls: number;
+    cached: number;
+    refused: number;
+  }[];
 };
 
 export type AgentActivity = {
@@ -63,6 +83,7 @@ export function retryApplication(applicationId: number): Promise<AgentStatus> {
 export function updateAgentSettings(settings: {
   autonomy_level?: AutonomyLevel;
   discovery_interval_hours?: number;
+  daily_llm_budget_usd?: number;
 }): Promise<AgentStatus> {
   return readJson("/api/agent/settings", { method: "PUT", body: JSON.stringify(settings) }) as Promise<AgentStatus>;
 }
