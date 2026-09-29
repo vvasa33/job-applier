@@ -1,18 +1,26 @@
-"""Application status and history. These routes record decisions; they do not drive a browser."""
+"""Application status, the visible apply flow, and history."""
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from jobhunter.api.deps import get_db
 from jobhunter.api.schemas import (
+    ApplicantFactIn,
     ApplicationEventOut,
     ApplicationResponse,
     OpenApplicationRequest,
+    PendingFieldOut,
+    ResumeApplicationRequest,
     ResumeVersionOut,
+    RunApplicationRequest,
     TransitionRequest,
 )
+from jobhunter.apply.decisions import ApplicantData, DecisionSource, KnownFact
+from jobhunter.apply.runner import pending_fields, refuse_submit, resume_page, run_page
 from jobhunter.applications import application_for_job, change_status, open_application
+from jobhunter.browser.errors import SubmitRefused
+from jobhunter.browser.manager import BrowserManager
 from jobhunter.db.models import Application, ApplicationEvent, Job, ResumeVersion
 from jobhunter.domain.application_flow import allowed_targets
 from jobhunter.domain.enums import EventActor
@@ -86,6 +94,101 @@ def transition_application(
     return _response(db, application)
 
 
+@router.post("/applications/{application_id}/run", response_model=ApplicationResponse)
+def run_application(
+    application_id: int,
+    request: Request,
+    body: RunApplicationRequest | None = None,
+    db: Session = Depends(get_db),
+) -> ApplicationResponse:
+    application = _application(db, application_id)
+    browser, owned = _browser(request)
+    try:
+        run_page(db, application, browser, _applicant(application, body or RunApplicationRequest()))
+        db.commit()
+    except ApplicationTransitionError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    finally:
+        if owned:
+            browser.close()
+    return _response(db, application)
+
+
+@router.post("/applications/{application_id}/answers", response_model=ApplicationResponse)
+def resume_application(
+    application_id: int,
+    body: ResumeApplicationRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> ApplicationResponse:
+    application = _application(db, application_id)
+    browser, owned = _browser(request)
+    try:
+        resume_page(
+            db,
+            application,
+            browser,
+            _applicant(application, body),
+            body.answers,
+            actor=EventActor.user,
+        )
+        db.commit()
+    except ApplicationTransitionError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    finally:
+        if owned:
+            browser.close()
+    return _response(db, application)
+
+
+@router.post("/applications/{application_id}/submit", response_model=ApplicationResponse)
+def submit_application(application_id: int, db: Session = Depends(get_db)) -> ApplicationResponse:
+    application = _application(db, application_id)
+    try:
+        refuse_submit(db, application, actor=EventActor.user)
+    except SubmitRefused as exc:
+        db.commit()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return _response(db, application)
+
+
+def _application(session: Session, application_id: int) -> Application:
+    application = session.get(Application, application_id)
+    if application is None:
+        raise HTTPException(status_code=404, detail="Application not found")
+    return application
+
+
+def _browser(request: Request) -> tuple[BrowserManager, bool]:
+    factory = getattr(request.app.state, "browser_factory", None)
+    if factory is not None:
+        return factory(), False
+    manager = BrowserManager(profile_dir=request.app.state.settings.data_dir / "browser-profile")
+    manager.open()
+    return manager, True
+
+
+def _applicant(application: Application, body: RunApplicationRequest | ResumeApplicationRequest) -> ApplicantData:
+    return ApplicantData(
+        facts=[_fact(fact) for fact in body.facts],
+        resume_path=body.resume_path,
+        resume_text=body.resume_text,
+        job_title=application.job.title,
+        company=application.job.company_name,
+        job_description=application.job.description_text,
+    )
+
+
+def _fact(fact: ApplicantFactIn) -> KnownFact:
+    try:
+        source = DecisionSource(fact.source)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"unknown fact source {fact.source}") from exc
+    return KnownFact(key=fact.key, value=fact.value, confidence=fact.confidence, source=source)
+
+
 def _response(session: Session, application: Application) -> ApplicationResponse:
     events = session.scalars(
         select(ApplicationEvent)
@@ -112,6 +215,18 @@ def _response(session: Session, application: Application) -> ApplicationResponse
         resume_version=None if current is None else _version(current),
         resume_versions=[_version(version) for version in versions],
         history=[_event(event) for event in events],
+        pending_fields=[_pending(field) for field in pending_fields(session, application)],
+    )
+
+
+def _pending(field: dict) -> PendingFieldOut:
+    return PendingFieldOut(
+        field_id=str(field.get("field_id") or ""),
+        label=str(field.get("label") or ""),
+        action=str(field.get("action") or ""),
+        proposed_value=field.get("proposed_value"),
+        reasoning=str(field.get("reasoning") or ""),
+        required=bool(field.get("required")),
     )
 
 

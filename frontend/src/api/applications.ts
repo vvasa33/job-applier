@@ -18,6 +18,15 @@ export type ApplicationEvent = {
   created_at: string;
 };
 
+export type PendingField = {
+  field_id: string;
+  label: string;
+  action: string;
+  proposed_value: string | null;
+  reasoning: string;
+  required: boolean;
+};
+
 export type ApplicationDetail = {
   id: number;
   job_id: number;
@@ -30,6 +39,7 @@ export type ApplicationDetail = {
   resume_version: ResumeVersion | null;
   resume_versions: ResumeVersion[];
   history: ApplicationEvent[];
+  pending_fields: PendingField[];
 };
 
 export class ApplicationRequestError extends Error {
@@ -49,6 +59,13 @@ export function openApplication(jobId: number, reason: string): Promise<Applicat
   return request(`/api/jobs/${jobId}/application`, {
     method: "POST",
     body: JSON.stringify({ reason }),
+  });
+}
+
+export function resumeApplication(applicationId: number, answers: Record<string, string>): Promise<ApplicationDetail> {
+  return request(`/api/applications/${applicationId}/answers`, {
+    method: "POST",
+    body: JSON.stringify({ answers }),
   });
 }
 

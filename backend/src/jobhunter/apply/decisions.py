@@ -217,6 +217,10 @@ class FieldDecision(BaseModel):
         return self
 
 
+def is_consequential(key: str | None) -> bool:
+    return key in _CONSEQUENTIAL
+
+
 def decide(field: ApplicationField, data: ApplicantData) -> FieldDecision:
     """Classify one field. Stored facts are repeated, never completed or guessed."""
 

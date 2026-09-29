@@ -114,6 +114,15 @@ class ApplicationEventOut(BaseModel):
     created_at: datetime
 
 
+class PendingFieldOut(BaseModel):
+    field_id: str
+    label: str
+    action: str
+    proposed_value: str | None = None
+    reasoning: str
+    required: bool = False
+
+
 class ApplicationResponse(BaseModel):
     id: int
     job_id: int
@@ -126,6 +135,27 @@ class ApplicationResponse(BaseModel):
     resume_version: ResumeVersionOut | None
     resume_versions: list[ResumeVersionOut]
     history: list[ApplicationEventOut]
+    pending_fields: list[PendingFieldOut] = Field(default_factory=list)
+
+
+class ApplicantFactIn(BaseModel):
+    key: str
+    value: str
+    confidence: float = Field(default=1, ge=0, le=1)
+    source: str = "profile"
+
+
+class RunApplicationRequest(BaseModel):
+    facts: list[ApplicantFactIn] = Field(default_factory=list)
+    resume_path: str | None = None
+    resume_text: str | None = None
+
+
+class ResumeApplicationRequest(BaseModel):
+    answers: dict[str, str] = Field(min_length=1)
+    facts: list[ApplicantFactIn] = Field(default_factory=list)
+    resume_path: str | None = None
+    resume_text: str | None = None
 
 
 class OpenApplicationRequest(BaseModel):

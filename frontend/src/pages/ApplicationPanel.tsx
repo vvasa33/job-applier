@@ -4,6 +4,7 @@ import {
   ApplicationRequestError,
   fetchApplication,
   openApplication,
+  resumeApplication,
   transitionApplication,
   type ApplicationDetail,
 } from "../api/applications";
@@ -15,6 +16,7 @@ export function ApplicationPanel({ jobId, onStatus }: { jobId: number; onStatus?
   >({ phase: "loading" });
   const [reason, setReason] = useState("");
   const [versionId, setVersionId] = useState("");
+  const [answers, setAnswers] = useState<Record<string, string>>({});
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -51,6 +53,22 @@ export function ApplicationPanel({ jobId, onStatus }: { jobId: number; onStatus?
       } else {
         setMessage(error instanceof Error ? error.message : "The application could not be opened.");
       }
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function resume(provided: Record<string, string>) {
+    if (state.phase !== "ready") return;
+    setPending(true);
+    setMessage(null);
+    try {
+      const application = await resumeApplication(state.application.id, provided);
+      setAnswers({});
+      setState({ phase: "ready", application });
+      onStatus?.(application.status);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "The answers could not be saved.");
     } finally {
       setPending(false);
     }
@@ -106,6 +124,9 @@ export function ApplicationPanel({ jobId, onStatus }: { jobId: number; onStatus?
           pending={pending}
           onReason={setReason}
           onVersion={setVersionId}
+          answers={answers}
+          onAnswer={(fieldId, value) => setAnswers((current) => ({ ...current, [fieldId]: value }))}
+          onResume={(provided) => void resume(provided)}
           onMove={(to, resumeVersionId) => void move(to, resumeVersionId)}
         />
       )}
@@ -121,14 +142,20 @@ function ApplicationBody({
   pending,
   onReason,
   onVersion,
+  answers,
+  onAnswer,
+  onResume,
   onMove,
 }: {
   application: ApplicationDetail;
   reason: string;
   versionId: string;
   pending: boolean;
+  answers: Record<string, string>;
   onReason: (value: string) => void;
   onVersion: (value: string) => void;
+  onAnswer: (fieldId: string, value: string) => void;
+  onResume: (answers: Record<string, string>) => void;
   onMove: (to: string, resumeVersionId: number | null) => void;
 }) {
   const needsVersion = application.allowed_transitions.includes("ready_to_apply");
@@ -161,6 +188,50 @@ function ApplicationBody({
           </dd>
         </div>
       </dl>
+
+      {application.status === "waiting_for_user" && application.pending_fields.length > 0 ? (
+        <form
+          className="mt-6 grid gap-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            onResume(
+              Object.fromEntries(
+                application.pending_fields.map((field) => [
+                  field.field_id,
+                  (answers[field.field_id] ?? field.proposed_value ?? "").trim(),
+                ]),
+              ),
+            );
+          }}
+        >
+          <h3 className="text-base font-medium">Answers needed</h3>
+          <p className="text-sm text-[var(--muted)]">Nothing here is guessed, and the application is not submitted.</p>
+          {application.pending_fields.map((field) => (
+            <label key={field.field_id} className="grid gap-1 text-sm">
+              <span>
+                {field.label || field.field_id}
+                {field.required ? " *" : ""}
+              </span>
+              <span className="text-[var(--muted)]">{field.reasoning}</span>
+              <input
+                value={answers[field.field_id] ?? field.proposed_value ?? ""}
+                onChange={(event) => onAnswer(field.field_id, event.target.value)}
+                className={controlClass}
+              />
+            </label>
+          ))}
+          <button
+            type="submit"
+            className={buttonClass}
+            disabled={
+              pending ||
+              application.pending_fields.some((field) => !(answers[field.field_id] ?? field.proposed_value ?? "").trim())
+            }
+          >
+            Save answers
+          </button>
+        </form>
+      ) : null}
 
       {application.allowed_transitions.length > 0 ? (
         <form
