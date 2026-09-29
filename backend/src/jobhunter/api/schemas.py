@@ -84,6 +84,14 @@ class CompileResponse(BaseModel):
     pdf_path: str
 
 
+class ApplicationResumeResponse(BaseModel):
+    application_id: int
+    tex_path: str
+    pdf_path: str
+    sha256: str
+    version_id: int
+
+
 class DashboardResponse(BaseModel):
     job_count: int
     internship_count: int

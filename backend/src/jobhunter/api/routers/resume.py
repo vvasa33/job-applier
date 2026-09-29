@@ -2,8 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from jobhunter.api.deps import get_db, get_settings
-from jobhunter.api.schemas import CompileResponse, ValidateResponse
+from jobhunter.api.schemas import ApplicationResumeResponse, CompileResponse, ValidateResponse
 from jobhunter.config import Settings
+from jobhunter.resume.application import prepare_application_resume
 from jobhunter.resume.master import MasterResumeError, compile_master, validate_master
 
 router = APIRouter(prefix="/api/resume")
@@ -33,3 +34,22 @@ def compile_resume(db: Session = Depends(get_db), settings: Settings = Depends(g
     except MasterResumeError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return CompileResponse(path=report.path, sha256=report.sha256, pdf_path=report.pdf_path)
+
+
+@router.post("/applications/{application_id}", response_model=ApplicationResumeResponse)
+def prepare_for_application(
+    application_id: int,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> ApplicationResumeResponse:
+    try:
+        report = prepare_application_resume(db, settings, application_id)
+    except MasterResumeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ApplicationResumeResponse(
+        application_id=report.application_id,
+        tex_path=report.tex_path,
+        pdf_path=report.pdf_path,
+        sha256=report.sha256,
+        version_id=report.version_id,
+    )

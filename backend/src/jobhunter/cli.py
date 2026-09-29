@@ -9,6 +9,7 @@ from pathlib import Path
 from jobhunter.config import get_settings
 from jobhunter.db.migrate import init_database
 from jobhunter.db.session import build_engine, session_factory
+from jobhunter.resume.application import prepare_application_resume
 from jobhunter.resume.master import MasterResumeError, compile_master, validate_master
 
 
@@ -130,6 +131,20 @@ def run_resume_validate() -> None:
     print(f"sections {kinds}")
 
 
+def run_resume_prepare(application_id: int) -> None:
+    settings, engine, session = _resume_session()
+    try:
+        report = prepare_application_resume(session, settings, application_id)
+    except MasterResumeError as exc:
+        raise SystemExit(str(exc)) from exc
+    finally:
+        session.close()
+        engine.dispose()
+    print(f"tex {report.tex_path}")
+    print(f"pdf {report.pdf_path}")
+    print(f"sha256 {report.sha256}")
+
+
 def run_resume_compile() -> None:
     settings, engine, session = _resume_session()
     try:
@@ -152,6 +167,8 @@ def main() -> None:
     resume_sub = resume.add_subparsers(dest="resume_command")
     resume_sub.add_parser("validate", help="Check the configured master resume and store its structure")
     resume_sub.add_parser("compile", help="Compile the master resume with pdflatex")
+    prepare = resume_sub.add_parser("prepare", help="Copy and compile a resume for one application")
+    prepare.add_argument("application_id", type=int)
     args = parser.parse_args()
     if args.command == "api":
         run_api()
@@ -163,6 +180,8 @@ def main() -> None:
         run_resume_validate()
     elif args.command == "resume" and args.resume_command == "compile":
         run_resume_compile()
+    elif args.command == "resume" and args.resume_command == "prepare":
+        run_resume_prepare(args.application_id)
     else:
         parser.print_help()
 
