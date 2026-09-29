@@ -169,6 +169,7 @@ class Resume(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     path: Mapped[str] = mapped_column(String(2000), nullable=False)
     sha256: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    structure: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     is_current: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     imported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 

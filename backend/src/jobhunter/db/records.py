@@ -122,14 +122,28 @@ def record_application_event(
     return event
 
 
-def add_master_resume(session: Session, *, path: str, sha256: str) -> Resume:
+def add_master_resume(
+    session: Session,
+    *,
+    path: str,
+    sha256: str,
+    structure: dict | None = None,
+) -> Resume:
+    current = session.scalars(select(Resume).where(Resume.is_current.is_(True))).all()
     existing = session.scalar(select(Resume).where(Resume.sha256 == sha256))
     if existing is not None:
+        for resume in current:
+            if resume.id != existing.id:
+                resume.is_current = False
+        existing.path = path
+        existing.is_current = True
+        if structure is not None:
+            existing.structure = structure
+        session.flush()
         return existing
-    current = session.scalars(select(Resume).where(Resume.is_current.is_(True))).all()
     for resume in current:
         resume.is_current = False
-    resume = Resume(path=path, sha256=sha256, is_current=True)
+    resume = Resume(path=path, sha256=sha256, is_current=True, structure=structure)
     session.add(resume)
     session.flush()
     return resume

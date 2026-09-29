@@ -8,6 +8,8 @@ from pathlib import Path
 
 from jobhunter.config import get_settings
 from jobhunter.db.migrate import init_database
+from jobhunter.db.session import build_engine, session_factory
+from jobhunter.resume.master import MasterResumeError, compile_master, validate_master
 
 
 def _repo_root() -> Path:
@@ -106,12 +108,50 @@ def run_dev() -> None:
     raise SystemExit(exit_code)
 
 
+def _resume_session():
+    settings = get_settings()
+    init_database(settings)
+    engine = build_engine(settings)
+    return settings, engine, session_factory(engine)()
+
+
+def run_resume_validate() -> None:
+    settings, engine, session = _resume_session()
+    try:
+        report = validate_master(session, settings)
+    except MasterResumeError as exc:
+        raise SystemExit(str(exc)) from exc
+    finally:
+        session.close()
+        engine.dispose()
+    kinds = ", ".join(section.kind for section in report.parsed.sections) or "none"
+    print(f"valid {report.path}")
+    print(f"sha256 {report.sha256}")
+    print(f"sections {kinds}")
+
+
+def run_resume_compile() -> None:
+    settings, engine, session = _resume_session()
+    try:
+        report = compile_master(session, settings)
+    except MasterResumeError as exc:
+        raise SystemExit(str(exc)) from exc
+    finally:
+        session.close()
+        engine.dispose()
+    print(f"compiled {report.pdf_path}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="jobhunter", description="Local job hunting assistant")
     sub = parser.add_subparsers(dest="command")
     sub.add_parser("dev", help="Start the API and the frontend")
     sub.add_parser("api", help="Start the API only")
     sub.add_parser("db-upgrade", help="Create or migrate the local SQLite database")
+    resume = sub.add_parser("resume", help="Validate or compile the master resume")
+    resume_sub = resume.add_subparsers(dest="resume_command")
+    resume_sub.add_parser("validate", help="Check the configured master resume and store its structure")
+    resume_sub.add_parser("compile", help="Compile the master resume with pdflatex")
     args = parser.parse_args()
     if args.command == "api":
         run_api()
@@ -119,6 +159,10 @@ def main() -> None:
         run_dev()
     elif args.command == "db-upgrade":
         init_database(get_settings())
+    elif args.command == "resume" and args.resume_command == "validate":
+        run_resume_validate()
+    elif args.command == "resume" and args.resume_command == "compile":
+        run_resume_compile()
     else:
         parser.print_help()
 

@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     port: int = Field(default=8765, ge=1, le=65535)
     data_dir: Path = Field(default_factory=default_data_dir)
     log_level: str = "INFO"
+    master_resume: Path | None = None
 
     @field_validator("host")
     @classmethod
